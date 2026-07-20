@@ -1,79 +1,45 @@
 import { create } from "zustand";
-import { epleyE1RM, roundE1RM } from "@/lib/math/e1rm";
 
-export type SetTagUI = "WARMUP" | "WORKING" | "DROP" | "FAILURE";
+export type SetTypeUI = "WARMUP" | "WORKING" | "DROP" | "FAILURE";
 
 export interface LoggedSet {
-  localId: string;
-  exerciseSlug: string;
-  exerciseName: string;
+  id: string;
+  exercise: string;
+  muscleGroup: string;
   setNumber: number;
-  weightKg: number;
+  weight: number;
   reps: number;
-  tag: SetTagUI;
+  setType: SetTypeUI;
   e1rm: number;
-  /** false until the API write lands (optimistic logging) */
-  persisted: boolean;
   isPR: boolean;
 }
 
 /**
- * The active training session. Optimistic-first: every set is committed to
- * this store instantly (zero-friction logging), then synced to /api/sets
- * fire-and-forget. A failed sync keeps the set local and flags it.
+ * Transient state for the click-to-log modal. Sets are written straight to
+ * MongoDB (POST /api/workouts) and mirrored here so the modal can show the
+ * running list for the current exercise and fire the PR celebration.
+ * Nothing here is persisted client-side — reload = fetch from the server.
  */
 interface SessionState {
-  activeExercise: { slug: string; name: string } | null;
+  activeExercise: { name: string; muscleGroup: string } | null;
   sets: LoggedSet[];
-  /** PR banner payload — cleared after the celebration plays */
-  celebration: { exerciseName: string; e1rm: number } | null;
-  setActiveExercise: (ex: { slug: string; name: string } | null) => void;
-  logSet: (input: { weightKg: number; reps: number; tag: SetTagUI }) => LoggedSet | null;
-  markPersisted: (localId: string, isPR: boolean) => void;
+  celebration: { exercise: string; e1rm: number } | null;
+  setActiveExercise: (ex: { name: string; muscleGroup: string } | null) => void;
+  addSet: (set: LoggedSet) => void;
   clearCelebration: () => void;
-  resetSession: () => void;
+  reset: () => void;
 }
 
-let idCounter = 0;
-
-export const useSessionStore = create<SessionState>((set, get) => ({
+export const useSessionStore = create<SessionState>((set) => ({
   activeExercise: null,
   sets: [],
   celebration: null,
-
   setActiveExercise: (ex) => set({ activeExercise: ex }),
-
-  logSet: ({ weightKg, reps, tag }) => {
-    const { activeExercise, sets } = get();
-    if (!activeExercise) return null;
-    const forExercise = sets.filter((s) => s.exerciseSlug === activeExercise.slug);
-    const entry: LoggedSet = {
-      localId: `set-${Date.now()}-${idCounter++}`,
-      exerciseSlug: activeExercise.slug,
-      exerciseName: activeExercise.name,
-      setNumber: forExercise.length + 1,
-      weightKg,
-      reps,
-      tag,
-      e1rm: roundE1RM(epleyE1RM(weightKg, reps)),
-      persisted: false,
-      isPR: false,
-    };
-    set({ sets: [...sets, entry] });
-    return entry;
-  },
-
-  markPersisted: (localId, isPR) =>
-    set((s) => {
-      const sets = s.sets.map((x) => (x.localId === localId ? { ...x, persisted: true, isPR } : x));
-      const hit = sets.find((x) => x.localId === localId);
-      return {
-        sets,
-        celebration:
-          isPR && hit ? { exerciseName: hit.exerciseName, e1rm: hit.e1rm } : s.celebration,
-      };
-    }),
-
+  addSet: (entry) =>
+    set((s) => ({
+      sets: [...s.sets, entry],
+      celebration: entry.isPR ? { exercise: entry.exercise, e1rm: entry.e1rm } : s.celebration,
+    })),
   clearCelebration: () => set({ celebration: null }),
-  resetSession: () => set({ sets: [], activeExercise: null, celebration: null }),
+  reset: () => set({ activeExercise: null, sets: [], celebration: null }),
 }));

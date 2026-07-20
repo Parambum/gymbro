@@ -25,6 +25,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 
-# prisma
-/prisma/migrations/dev.db*
 /screenshots
+
+# local verification helpers (ephemeral)
+/scripts-tmp

@@ -49,10 +49,12 @@ export function CameraRig() {
       ref={controlsRef}
       makeDefault
       enablePan={false}
-      minDistance={0.8}
-      maxDistance={4.5}
-      minPolarAngle={Math.PI * 0.12}
-      maxPolarAngle={Math.PI * 0.72}
+      enableZoom
+      // full 360° azimuth (default) + near-full vertical arc for true orbit
+      minDistance={0.7}
+      maxDistance={6}
+      minPolarAngle={Math.PI * 0.04}
+      maxPolarAngle={Math.PI * 0.96}
       target={[0, 1.05, 0]}
       onStart={releaseFocus}
     />

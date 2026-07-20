@@ -1,15 +1,19 @@
-# PROGRESS-O-METER
+# GYMBRO
 
-**FitNotes × Strava, rendered in neon.** Strength logging with an interactive 3D
-anatomy hub, endurance telemetry with Strava-style splits and Relative Effort,
-and a Smart Progression engine that charts Epley e1RM instead of lying
-absolute-weight lines.
+**A serious tool for serious progression.** Multi-user strength-training tracker:
+click a muscle on a 3D anatomy model to log it, build your own exercises, and
+watch true progress unfold through Epley e1RM analytics — never absolute weight,
+which lies about volume gains.
 
 ```
 Next.js 15 (App Router) · React 19 · TypeScript strict · Tailwind
+Auth.js v5 (credentials + optional Google) · MongoDB + Mongoose
 React Three Fiber + drei + postprocessing (bloom) · motion (Framer)
-Recharts · Zustand · Prisma · PostgreSQL · Zod
+Recharts · Zustand · Zod · bcryptjs
 ```
+
+> **Phase 1 — Gym/Strength only.** Cardio/running is intentionally out of scope
+> for this phase; the whole surface is focused on perfecting strength tracking.
 
 ---
 
@@ -17,161 +21,135 @@ Recharts · Zustand · Prisma · PostgreSQL · Zod
 
 ```bash
 npm install
-npm run dev          # runs immediately — no DB needed (demo-data fallback)
+cp .env.example .env         # then fill in MONGODB_URI + AUTH_SECRET (below)
+npm run dev                  # http://localhost:3000
 ```
 
-Full persistence (PostgreSQL):
+**MongoDB Atlas** — create a free cluster at <https://cloud.mongodb.com>, add a
+DB user, allow your IP, copy the driver connection string (append `/gymbro`), and
+paste it as `MONGODB_URI`.
 
-```bash
-cp .env.example .env         # point DATABASE_URL at your Postgres
-npm run db:push              # create schema
-npm run db:seed              # 180 exercises + 10 weeks of demo history
-npm run dev
-```
+**Auth secret** — `npx auth secret` (or `openssl rand -base64 33`) → `AUTH_SECRET`.
 
-Every API route falls back to deterministic demo fixtures when the database is
-unreachable, so the UI is always fully populated. `GET` responses carry a
-`source: "db" | "demo"` field.
+**Google sign-in** *(optional)* — set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+to light up the "Continue with Google" button; leave blank to hide it.
 
-## The Smart Progression thesis
+## The blank-slate rule
 
-Absolute weight is a lying metric. 30 kg × 10 in week 1 vs 30 kg × 14 in week 3
-is real progress that a weight-only chart renders flat. Every set is normalized
-at write time to its **Epley e1RM**:
+There is **zero dummy, seed, or demo data** for user logs anywhere in this
+codebase. A new account's dashboard, analytics, and history all initialize
+empty and say so ("Your slate is blank", "Log your first Chest workout to
+generate analytics") until the user logs a real set. The only pre-populated
+content is the **base exercise library** (180 standard lifts in
+[exercise-catalog.ts](src/lib/data/exercise-catalog.ts)) — reference definitions,
+not logged data — which users extend with their own custom exercises.
+
+## The progression thesis
+
+Absolute weight is a lying metric. 30 kg × 10 vs 30 kg × 14 is real progress a
+weight-only chart renders flat. Every set is normalized at write time to its
+**Epley e1RM**:
 
 ```
 e1RM = w · (1 + r / 30)
 ```
 
-The analytics chart plots daily-best e1RM with a least-squares trendline
-overlay, and its tooltip explains the *mechanics* of each move:
-`Progress: +11.3% e1RM via volume overload` vs `via load increase`.
-Implementation: [e1rm.ts](src/lib/math/e1rm.ts), [regression.ts](src/lib/math/regression.ts).
-
-Cardio gets equal depth: **Relative Effort** is a Banister-TRIMP score from
-duration × heart-rate reserve (zone-weighted variant included), pace/splits math
-is Strava-style per-km. Implementation:
-[relative-effort.ts](src/lib/math/relative-effort.ts), [pace.ts](src/lib/math/pace.ts).
+The analytics chart plots daily-best e1RM per muscle with a least-squares
+trendline; a working set that beats the standing best fires a PR celebration.
+Math in [e1rm.ts](src/lib/math/e1rm.ts) / [regression.ts](src/lib/math/regression.ts).
 
 ## Architecture map
 
 ```
 src/
+├── auth.ts / auth.config.ts        Auth.js v5 — split config so middleware stays
+│                                   edge-safe; credentials validated in Node with
+│                                   Mongoose + bcrypt; optional Google upserts to Mongo
+├── middleware.ts                   gate /dashboard /train /analytics /history
+│
+├── models/                         Mongoose schemas
+│   ├── User.ts                     email, name, bcrypt passwordHash, provider
+│   ├── Exercise.ts                 user-created custom exercises (tied to userId)
+│   └── Workout.ts                  ★ FLEXIBLE: one doc per (user, day), embedding a
+│                                   bag of sets across whatever muscles were trained —
+│                                   NOT a predefined split. e1rm denormalized per set.
+│
 ├── app/
-│   ├── page.tsx                    Landing — BackgroundBeams + DecryptedText hero
-│   ├── dashboard/page.tsx          BentoGrid: streak, last session, PR vault,
-│   │                               weekly volume + effort charts, quick-log CTA
-│   ├── train/page.tsx              ← THE 3D HUB (client, dynamic ssr:false)
-│   ├── cardio/page.tsx             Telemetry form + intensity-glow history cards
-│   ├── analytics/page.tsx          e1RM area chart + trendline + stat tiles + table view
+│   ├── page.tsx                    landing (auth-aware CTA)
+│   ├── login / signup              Auth.js credential screens (wavy neon bg)
+│   ├── dashboard/                  streak · last session · PR vault · body radar
+│   │                               · volume — or the blank-slate hero
+│   ├── train/                      ★ 3D anatomy hub → click a muscle → log modal
+│   ├── analytics/                  muscle picker · e1RM chart + trendline · stats
+│   │                               · per-exercise breakdown · body radar · empty states
+│   ├── history/                    calendar (dots on logged days) + that day's sets
 │   └── api/
-│       ├── sets/route.ts           POST — e1RM computed server-side, PR upsert
-│       ├── cardio/route.ts         GET/POST — sessions + auto km splits
-│       ├── dashboard/route.ts      GET — streak/PR/weekly aggregates
-│       └── analytics/e1rm/route.ts GET — daily-best e1RM series (indexed scan)
+│       ├── auth/[...nextauth]      Auth.js handler
+│       ├── auth/register           POST — create credentials account (bcrypt)
+│       ├── exercises               GET base+custom · POST custom exercise
+│       ├── workouts                POST log set (PR check) · GET day
+│       ├── workouts/dates          GET days-with-logs (calendar dots)
+│       └── analytics/{muscle,overview}   aggregation pipelines (e1RM series, radar)
 │
 ├── components/
-│   ├── three/                      R3F layer
-│   │   ├── anatomy-config.ts       9 muscle zones: primitive meshes + camera poses
-│   │   ├── anatomy-model.tsx       low-poly figure; hover=glow, click=select
-│   │   ├── camera-rig.tsx          damped focus flight; releases on user orbit
-│   │   └── anatomy-canvas.tsx      Canvas + lights + grid floor + Bloom pass
-│   ├── ui/                         Aceternity-style kit
-│   │   ├── bento-grid.tsx          dashboard skeleton
-│   │   ├── background-beams.tsx    landing ambience
-│   │   ├── wavy-background.tsx     empty-state ambience (simplex noise)
-│   │   ├── hover-border-gradient.tsx  orbiting-spark CTA borders
-│   │   └── glow-card.tsx           spotlight card; glow scales with intensity
-│   ├── reactbits/                  micro-interactions
-│   │   ├── decrypted-text.tsx      PR unlock scramble
-│   │   ├── magnetic-button.tsx     spring-physics LOG SET trigger
-│   │   └── count-up.tsx            stat tick-up on scroll into view
-│   ├── strength/
-│   │   ├── strength-panel.tsx      zone-filtered exercise picker (20/group)
-│   │   └── set-logger.tsx          steppers + tag chips + optimistic sync + PR banner
-│   ├── cardio/
-│   │   ├── cardio-config.ts        activity/run-type definitions
-│   │   ├── telemetry-form.tsx      live pace + Relative Effort preview
-│   │   └── session-card.tsx        effort-band glow history card
-│   └── charts/                     Recharts, validated palette only
+│   ├── three/                      R3F: anatomy model, 9 muscle zones, 360° rig, bloom
+│   ├── strength/                   log-modal · exercise-picker (+ add custom) · set-form
+│   ├── charts/                     e1rm-chart (area + trendline) · body-radar · volume
+│   ├── ui/                         bento · animated-modal · beams · wavy · glow · borders
+│   ├── reactbits/                  decrypted-text (PR unlock) · magnetic-button · count-up
+│   ├── history/calendar.tsx        custom month calendar
+│   └── brand/gymbro-logo.tsx       the jacked-figure-with-shaker mark
 │
-├── store/
-│   ├── anatomy-store.ts            hovered/selected zone + camera focus token
-│   └── session-store.ts            optimistic set log + PR celebration
-│
-└── lib/
-    ├── math/                       e1rm · regression · relative-effort · pace
-    ├── data/exercise-catalog.ts    9 groups × 20 = 180 exercises (single source)
-    ├── data/demo-data.ts           deterministic no-DB fixtures
-    ├── chart-palette.ts            CVD-validated series colors (see below)
-    └── prisma.ts / api-helpers.ts
+├── store/                          Zustand: anatomy (hover/select/camera) · session (logging)
+└── lib/                            math · db/mongoose · auth-helpers · validation · date-utils
 ```
 
-### How the 3D hub wires into state
+### The click-to-log flow
 
 ```
-click mesh ──► useAnatomyStore.select(slug) ──► camera-rig damps to zone pose
-                        │
-                        └─► strength-panel filters catalog to that group
-                                  └─► pick exercise ─► set-logger
-                                            └─► useSessionStore.logSet()  (instant)
-                                                      └─► POST /api/sets  (async)
-                                                                └─► isPR? ─► DecryptedText banner
+click muscle mesh ─► anatomy-store.select(slug) ─► camera flies to zone
+                              │
+                              └─► LogModal opens, filtered to that muscle
+                                    ├─ base library + your custom exercises (GET /api/exercises)
+                                    ├─ "Add custom exercise" ─► POST /api/exercises (tied to userId)
+                                    └─ pick one ─► SetForm ─► POST /api/workouts
+                                                                 └─ isPR? ─► DecryptedText celebration
 ```
 
-The Zustand store is the only bridge between the WebGL canvas and the DOM —
-no props cross the boundary, so the canvas never re-renders on panel state.
-A chip row under the canvas drives the same `select()` for keyboard and
-screen-reader users.
+The Zustand stores are the only bridge between the WebGL canvas and the DOM, so
+the canvas never re-renders on logging state. A chip row under the model drives
+the same `select()` for keyboard / screen-reader users.
 
-## Data model highlights
+## Data model notes
 
-- `WorkoutSet.e1rm` is **denormalized at write time** — the analytics endpoint
-  is one indexed range scan (`@@index([exerciseId, performedAt])`) + a per-day
-  max fold. No recomputation at read time, ever.
-- `Workout` has `@@unique([userId, date])` — one container per training day,
-  upserted on first set, so "rapid logging" needs zero session bootstrapping.
-- `PersonalRecord` is an upserted singleton per (user, exercise): the current
-  best, checked against on every non-warmup set write.
-- `CardioSession.relativeEffort` likewise computed once, indexed by
-  `(userId, date)` for feed queries; `CardioSplit` rows hold per-km telemetry.
+- **`Workout` is deliberately split-free.** `{ userId, date, sets: [...] }` — a
+  training day is just the sets performed, across any muscles. `@@unique(userId, date)`.
+- **`WorkoutSet.e1rm` denormalized at write time** → analytics are indexed
+  aggregation pipelines (`$unwind` → `$match` → `$group`), never read-time recompute.
+- **`PersonalRecord`-style check**: each non-warmup set is compared against the
+  standing max e1RM for that exercise via aggregation before insert.
+- **`Exercise`** holds only user custom additions, unique per `(userId, muscle, name)`.
 
-## Chart palette — validated, don't eyeball
+## Auth model
 
-Series colors passed a 6-check colorblind-safety validator (OKLCH lightness
-band, chroma floor, CVD ΔE separation, normal-vision floor, WCAG contrast)
-against the app surface `#0a0a14`:
-
-| Chart | Series | Hex |
-|---|---|---|
-| Strength | e1RM | `#8b5cf6` |
-| Strength | Volume | `#16a34a` |
-| Cardio | Pace | `#0284c7` |
-| Cardio | Effort | `#f43f5e` |
-| Any | Trendline | `#9ca3af` (neutral ink, never a third hue) |
-
-The hotter neons (`hot.*` in [tailwind.config.ts](tailwind.config.ts)) are
-UI glow/border accents **only** — never chart marks. Rules live in
-[chart-palette.ts](src/lib/chart-palette.ts).
-
-## Deliberate scope cuts
-
-- **Auth**: single-operator (`getOperator()` in
-  [api-helpers.ts](src/lib/api-helpers.ts)) — swap for a session lookup when
-  adding accounts. The schema is already multi-user.
-- **Units**: metric canonical (kg / m / s); `kgToLb`, `kmToMi` converters ship
-  in [pace.ts](src/lib/math/pace.ts) for a display-preference layer.
-- **GPS ingest**: splits are even-pace synthesized on manual entry;
-  `splitsFromDurations()` accepts real per-km telemetry when a GPX/FIT
-  importer lands.
+Auth.js v5 with a JWT session strategy. The **edge-safe** half
+([auth.config.ts](src/auth.config.ts)) does route gating + id plumbing and is
+imported by `middleware.ts`; the **Node** half ([auth.ts](src/auth.ts)) runs the
+Credentials `authorize` (Mongoose + bcrypt) and the optional Google provider,
+which upserts OAuth users into the same `users` collection so every query keys on
+one identity. The MongoDB `_id` rides the JWT into `session.user.id`.
 
 ## Scripts
 
 | Command | Effect |
 |---|---|
-| `npm run dev` | dev server (demo fallback without DB) |
+| `npm run dev` | dev server |
 | `npm run build` / `start` | production |
-| `npm run typecheck` | strict TS across app + seed |
-| `npm run db:push` | apply schema to Postgres |
-| `npm run db:seed` | 180 exercises + demo history (idempotent) |
-| `npm run db:studio` | Prisma Studio |
+| `npm run typecheck` | strict TS, no emit |
+
+## Verified
+
+Built and driven end-to-end against a real MongoDB: signup → login → blank
+dashboard → 3D click-to-log (incl. a custom exercise) → populated dashboard,
+per-muscle analytics, body radar, and calendar history — all real writes, no
+seeded data. e1RM math checks out (60 kg × 10 → 80.0, 100 kg × 9 → 130.0).

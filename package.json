@@ -1,29 +1,26 @@
 {
-  "name": "progress-o-meter",
+  "name": "gymbro",
   "version": "1.0.0",
   "private": true,
-  "description": "FitNotes x Strava hybrid — strength logging + endurance telemetry in a 3D cyberpunk shell",
+  "description": "GymBro — multi-user strength-training tracker: 3D anatomy click-to-log, custom exercises, and Epley e1RM progression analytics. Next.js + MongoDB.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "lint": "next lint"
   },
   "dependencies": {
-    "@prisma/client": "^6.2.1",
     "@react-three/drei": "^10.0.1",
     "@react-three/fiber": "^9.0.4",
     "@react-three/postprocessing": "^3.0.4",
+    "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "mongoose": "^8.9.5",
     "motion": "^12.4.7",
     "next": "^15.1.6",
+    "next-auth": "^5.0.0-beta.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.1",
@@ -34,15 +31,14 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "@types/three": "^0.173.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
-    "prisma": "^6.2.1",
     "tailwindcss": "^3.4.17",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
 }

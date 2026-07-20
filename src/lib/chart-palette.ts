@@ -16,11 +16,8 @@ export const STRENGTH_SERIES = {
   volume: "#16a34a", // cyber green
 } as const;
 
-/** Endurance analytics: pace/effort lines. */
-export const CARDIO_SERIES = {
-  pace: "#0284c7", // electric blue
-  effort: "#f43f5e", // electric crimson
-} as const;
+/** Body-progression radar — one hue for the single "current best e1RM" series. */
+export const RADAR = "#8b5cf6";
 
 /** Trendline overlays — neutral ink, never a third hue. */
 export const TREND = "#9ca3af";
