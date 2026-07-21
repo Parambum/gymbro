@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Trash2 } from "lucide-react";
 import { Calendar } from "@/components/history/calendar";
 import { groupBySlug } from "@/lib/data/exercise-catalog";
 import { prettyDate, todayIso } from "@/lib/date-utils";
@@ -22,20 +23,33 @@ export default function HistoryPage() {
   const [marked, setMarked] = useState<Set<string>>(new Set());
   const [sets, setSets] = useState<DaySet[] | null>(null);
 
-  useEffect(() => {
+  const loadDates = useCallback(() => {
     fetch("/api/workouts/dates")
       .then((r) => r.json())
       .then((j) => setMarked(new Set<string>(j.dates ?? [])))
       .catch(() => setMarked(new Set()));
   }, []);
 
-  useEffect(() => {
+  const loadDay = useCallback((date: string) => {
     setSets(null);
-    fetch(`/api/workouts?date=${selected}`)
+    fetch(`/api/workouts?date=${date}`)
       .then((r) => r.json())
       .then((j) => setSets(j.sets ?? []))
       .catch(() => setSets([]));
-  }, [selected]);
+  }, []);
+
+  useEffect(() => loadDates(), [loadDates]);
+  useEffect(() => loadDay(selected), [selected, loadDay]);
+
+  const del = async (id: string) => {
+    setSets((prev) => prev?.filter((s) => s.id !== id) ?? prev); // optimistic
+    try {
+      await fetch(`/api/workouts?date=${selected}&setId=${id}`, { method: "DELETE" });
+      loadDates(); // a day may have just emptied → drop its calendar dot
+    } catch {
+      loadDay(selected); // reconcile on failure
+    }
+  };
 
   const grouped = useMemo(() => {
     const map = new Map<string, DaySet[]>();
@@ -115,7 +129,7 @@ export default function HistoryPage() {
                     </h3>
                     <ul className="space-y-1.5">
                       {list.map((s, i) => (
-                        <li key={s.id} className="flex items-center justify-between font-mono text-xs">
+                        <li key={s.id} className="group flex items-center justify-between font-mono text-xs">
                           <span className="text-zinc-500">#{i + 1}</span>
                           <span className="flex-1 pl-3 text-zinc-300">{s.exercise}</span>
                           <span className="text-zinc-200">
@@ -133,6 +147,13 @@ export default function HistoryPage() {
                             {s.setType}
                           </span>
                           <span className="ml-3 w-16 text-right tabular-nums text-zinc-400">{s.e1rm} e1RM</span>
+                          <button
+                            onClick={() => del(s.id)}
+                            aria-label={`delete ${s.exercise} set ${i + 1}`}
+                            className="ml-2 rounded p-1 text-zinc-600 opacity-0 transition-all hover:text-neon-crimson group-hover:opacity-100 focus:opacity-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </li>
                       ))}
                     </ul>

@@ -86,3 +86,33 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
   }
 }
+
+/** DELETE /api/workouts — remove one set; prune the day if it becomes empty. */
+export async function DELETE(req: Request) {
+  const userId = await currentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const date = url.searchParams.get("date") ?? "";
+  const setId = url.searchParams.get("setId") ?? "";
+  if (!isValidIso(date) || !Types.ObjectId.isValid(setId)) {
+    return NextResponse.json({ error: "Valid date and setId are required" }, { status: 400 });
+  }
+
+  try {
+    await connectDB();
+    const uid = new Types.ObjectId(userId);
+    const res = await Workout.updateOne(
+      { userId: uid, date },
+      { $pull: { sets: { _id: new Types.ObjectId(setId) } } },
+    );
+    if (res.modifiedCount === 0) {
+      return NextResponse.json({ error: "Set not found" }, { status: 404 });
+    }
+    // keep the calendar honest: drop the day's doc once it holds no sets
+    await Workout.deleteOne({ userId: uid, date, sets: { $size: 0 } });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
+  }
+}

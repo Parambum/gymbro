@@ -26,6 +26,7 @@ interface SessionState {
   celebration: { exercise: string; e1rm: number } | null;
   setActiveExercise: (ex: { name: string; muscleGroup: string } | null) => void;
   addSet: (set: LoggedSet) => void;
+  removeSet: (id: string) => void;
   clearCelebration: () => void;
   reset: () => void;
 }
@@ -40,6 +41,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       sets: [...s.sets, entry],
       celebration: entry.isPR ? { exercise: entry.exercise, e1rm: entry.e1rm } : s.celebration,
     })),
+  removeSet: (id) => set((s) => ({ sets: s.sets.filter((x) => x.id !== id) })),
   clearCelebration: () => set({ celebration: null }),
   reset: () => set({ activeExercise: null, sets: [], celebration: null }),
 }));
