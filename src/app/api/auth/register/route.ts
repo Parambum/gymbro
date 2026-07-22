@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch {
     return NextResponse.json(
-      { error: "Could not reach the database. Verify MONGODB_URI in your .env." },
+      { error: "Could not reach the database. Verify the MONGODB_URI environment variable." },
       { status: 503 },
     );
   }

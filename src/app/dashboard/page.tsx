@@ -37,7 +37,7 @@ export default function DashboardPage() {
   if (failed) {
     return (
       <CenteredNote className="text-neon-crimson">
-        Could not reach the database — verify MONGODB_URI in your .env, then refresh.
+        Could not reach the database — verify the MONGODB_URI environment variable, then refresh.
       </CenteredNote>
     );
   }
