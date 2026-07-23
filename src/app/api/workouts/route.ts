@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/db/mongoose";
 import { Workout } from "@/models/Workout";
+import { OneRepMax } from "@/models/OneRepMax";
 import { currentUserId } from "@/lib/auth-helpers";
 import { LogSetSchema } from "@/lib/validation";
 import { epleyE1RM, roundE1RM } from "@/lib/math/e1rm";
 import { isValidIso, todayIso } from "@/lib/date-utils";
+import { mainLift } from "@/lib/data/main-lifts";
 
 export const runtime = "nodejs";
 
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { date, exercise, muscleGroup, weight, reps, setType } = parsed.data;
+  const { date, exercise, muscleGroup, weight, reps, setType, supersetGroup } = parsed.data;
   const e1rm = roundE1RM(epleyE1RM(weight, reps));
 
   try {
@@ -37,7 +39,16 @@ export async function POST(req: Request) {
     ]);
     const isPR = setType !== "WARMUP" && (!prior || e1rm > prior.best);
 
-    const setDoc = { exercise, muscleGroup, weight, reps, setType, e1rm, createdAt: new Date() };
+    const setDoc = {
+      exercise,
+      muscleGroup,
+      weight,
+      reps,
+      setType,
+      supersetGroup: supersetGroup || null,
+      e1rm,
+      createdAt: new Date(),
+    };
     const workout = await Workout.findOneAndUpdate(
       { userId: uid, date },
       { $push: { sets: setDoc }, $setOnInsert: { userId: uid, date } },
@@ -47,10 +58,27 @@ export async function POST(req: Request) {
     const saved = workout.sets[workout.sets.length - 1];
     const setNumber = workout.sets.filter((s) => s.exercise === exercise).length;
 
+    // Recorded 1RM: a true single (1 rep) on a main lift IS the 1RM — record
+    // it when it beats the standing mark. No estimation involved.
+    let recordedOneRepMax = false;
+    const lift = mainLift(exercise);
+    if (lift && reps === 1 && setType !== "WARMUP") {
+      const existing = await OneRepMax.findOne({ userId: uid, exercise });
+      if (!existing || weight > existing.oneRepMax) {
+        await OneRepMax.findOneAndUpdate(
+          { userId: uid, exercise },
+          { muscleGroup: lift.muscleGroup, oneRepMax: weight, source: "logged", recordedAt: new Date() },
+          { upsert: true },
+        );
+        recordedOneRepMax = true;
+      }
+    }
+
     return NextResponse.json(
       {
         set: { id: String(saved._id), exercise, muscleGroup, weight, reps, setType, e1rm, setNumber },
         isPR,
+        recordedOneRepMax,
       },
       { status: 201 },
     );
@@ -79,6 +107,7 @@ export async function GET(req: Request) {
       weight: s.weight,
       reps: s.reps,
       setType: s.setType,
+      supersetGroup: s.supersetGroup ?? null,
       e1rm: s.e1rm,
     }));
     return NextResponse.json({ date, sets });

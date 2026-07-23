@@ -8,7 +8,10 @@ import { epleyE1RM, roundE1RM } from "@/lib/math/e1rm";
 import { MagneticButton } from "@/components/reactbits/magnetic-button";
 import { DecryptedText } from "@/components/reactbits/decrypted-text";
 import { todayIso } from "@/lib/date-utils";
+import { isMainLift } from "@/lib/data/main-lifts";
 import { cn } from "@/lib/utils";
+
+const SUPERSETS = ["A", "B", "C"] as const;
 
 const TAGS: Array<{ id: SetTypeUI; label: string; cls: string }> = [
   { id: "WARMUP", label: "Warmup", cls: "border-zinc-600 text-zinc-400 data-[on=true]:bg-zinc-500/20" },
@@ -126,11 +129,16 @@ export function SetForm({
   const [weight, setWeight] = useState(20);
   const [reps, setReps] = useState(8);
   const [setType, setSetType] = useState<SetTypeUI>("WORKING");
+  const [superset, setSuperset] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
+  const [ormFlash, setOrmFlash] = useState(false);
   const [lastHint, setLastHint] = useState<{ weight: number; reps: number } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isMain = isMainLift(exercise);
+  const willRecordOneRepMax = isMain && reps === 1 && setType !== "WARMUP";
 
   // smart prefill: last time this exercise was trained
   useEffect(() => {
@@ -168,7 +176,7 @@ export function SetForm({
       const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, exercise, muscleGroup, weight, reps, setType }),
+        body: JSON.stringify({ date, exercise, muscleGroup, weight, reps, setType, supersetGroup: superset }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -184,10 +192,14 @@ export function SetForm({
         weight,
         reps,
         setType,
+        supersetGroup: superset,
         e1rm: json.set.e1rm,
         isPR: json.isPR,
       });
-      if (json.isPR) {
+      if (json.recordedOneRepMax) {
+        setOrmFlash(true);
+        setTimeout(() => setOrmFlash(false), 3200);
+      } else if (json.isPR) {
         setTimeout(clearCelebration, 3200);
       } else {
         setFlash(true);
@@ -234,6 +246,23 @@ export function SetForm({
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {ormFlash && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="rounded-xl border border-hot-purple/60 bg-hot-purple/10 p-3 text-center shadow-neon-purple"
+          >
+            <DecryptedText
+              text={`◆ 1RM RECORDED — ${weight} KG ◆`}
+              className="text-sm font-bold text-neon-purple"
+              playKey={weight}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {lastHint && (
         <button
           onClick={applyLast}
@@ -264,13 +293,46 @@ export function SetForm({
         ))}
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-edge bg-void/60 px-4 py-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-          Set {forExercise.length + 1} · projected e1RM
-        </span>
-        <span className="font-mono text-lg font-bold tabular-nums" style={{ color: accent }}>
-          {projected} kg
-        </span>
+      {/* superset: link this set to others sharing the same label (across exercises) */}
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">Superset</span>
+        <button
+          onClick={() => setSuperset(null)}
+          data-on={superset === null}
+          className="rounded-md border border-edge bg-transparent px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-all data-[on=true]:border-zinc-500 data-[on=true]:text-zinc-200"
+        >
+          Off
+        </button>
+        {SUPERSETS.map((label) => (
+          <button
+            key={label}
+            onClick={() => setSuperset(label)}
+            data-on={superset === label}
+            className="h-7 w-7 rounded-md border border-hot-blue/50 bg-transparent font-mono text-[11px] font-bold text-neon-blue transition-all data-[on=true]:bg-hot-blue/20"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-edge bg-void/60 px-4 py-2">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+            {willRecordOneRepMax ? (
+              <span className="text-neon-purple">Set {forExercise.length + 1} · records 1RM</span>
+            ) : (
+              <>Set {forExercise.length + 1} · Est. 1RM</>
+            )}
+          </span>
+          <span className="font-mono text-lg font-bold tabular-nums" style={{ color: willRecordOneRepMax ? "#a78bfa" : accent }}>
+            {willRecordOneRepMax ? weight : projected} kg
+          </span>
+        </div>
+        {isMain && !willRecordOneRepMax && (
+          <p className="mt-1 font-mono text-[9px] text-zinc-600">
+            estimate only — log this main lift at 1 rep to record a true 1RM
+          </p>
+        )}
       </div>
 
       {error && <p className="font-mono text-[11px] text-neon-crimson">{error}</p>}
@@ -307,6 +369,11 @@ export function SetForm({
               <span className="flex-1 text-zinc-200">
                 {s.weight} kg × {s.reps}
               </span>
+              {s.supersetGroup && (
+                <span className="rounded bg-hot-blue/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-neon-blue">
+                  SS {s.supersetGroup}
+                </span>
+              )}
               <span
                 className={cn(
                   "rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider",

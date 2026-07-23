@@ -26,8 +26,16 @@ export const LogSetSchema = z.object({
   weight: z.number().min(0).max(2000),
   reps: z.number().int().min(1).max(300),
   setType: z.enum(["WARMUP", "WORKING", "DROP", "FAILURE"]).default("WORKING"),
+  /** superset label (e.g. "A"), linking this set to others in the same group */
+  supersetGroup: z.string().trim().max(2).optional().nullable(),
+});
+
+export const OneRepMaxSchema = z.object({
+  exercise: z.string().trim().min(1).max(80),
+  oneRepMax: z.number().min(1).max(2000),
 });
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LogSetInput = z.infer<typeof LogSetSchema>;
 export type CustomExerciseInput = z.infer<typeof CustomExerciseSchema>;
+export type OneRepMaxInput = z.infer<typeof OneRepMaxSchema>;

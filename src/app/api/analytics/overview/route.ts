@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/db/mongoose";
 import { Workout, type SetEntry } from "@/models/Workout";
+import { OneRepMax } from "@/models/OneRepMax";
 import { currentUserId } from "@/lib/auth-helpers";
 import { MUSCLE_GROUPS, groupBySlug } from "@/lib/data/exercise-catalog";
+import { MAIN_LIFTS } from "@/lib/data/main-lifts";
 import { streakFromDates, weekStartIso, isValidIso, todayIso } from "@/lib/date-utils";
 
 export const runtime = "nodejs";
@@ -59,25 +61,40 @@ export async function GET(req: Request) {
     let lastWorkout: {
       date: string;
       muscles: string[];
+      muscleSlugs: string[];
       topSet: string;
       setCount: number;
       volumeKg: number;
     } | null = null;
+    let lastMuscleSlugs: string[] = [];
     const last = [...workouts].reverse().find((w) => w.sets.length > 0);
     if (last) {
       const working = last.sets.filter(isWorking);
       const top = (working.length ? working : last.sets).reduce((a, b) => (b.e1rm > a.e1rm ? b : a));
-      const muscleNames = [...new Set(last.sets.map((s) => s.muscleGroup))].map(
-        (slug) => groupBySlug(slug)?.name ?? slug,
-      );
+      lastMuscleSlugs = [...new Set(last.sets.map((s) => s.muscleGroup))];
       lastWorkout = {
         date: last.date,
-        muscles: muscleNames,
+        muscles: lastMuscleSlugs.map((slug) => groupBySlug(slug)?.name ?? slug),
+        muscleSlugs: lastMuscleSlugs,
         topSet: `${top.exercise} — ${top.weight} kg × ${top.reps}`,
         setCount: last.sets.length,
         volumeKg: Math.round(working.reduce((sum, s) => sum + volumeOf(s), 0)),
       };
     }
+
+    // recorded 1-rep maxes for the main lifts (actual, not estimated)
+    const ormRecords = await OneRepMax.find({ userId: new Types.ObjectId(userId) }).lean();
+    const ormByExercise = new Map(ormRecords.map((r) => [r.exercise, r]));
+    const oneRepMaxes = MAIN_LIFTS.map((l) => {
+      const r = ormByExercise.get(l.exercise);
+      return {
+        exercise: l.exercise,
+        short: l.short,
+        muscleGroup: l.muscleGroup,
+        oneRepMax: r ? r.oneRepMax : null,
+        source: r ? (r.source as "logged" | "manual") : null,
+      };
+    });
 
     const radar = MUSCLE_GROUPS.map((g) => ({
       slug: g.slug,
@@ -105,6 +122,7 @@ export async function GET(req: Request) {
       recentPRs,
       radar,
       weeklyVolume: weekly,
+      oneRepMaxes,
     });
   } catch {
     return NextResponse.json({ error: "Database unavailable" }, { status: 503 });

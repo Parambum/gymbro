@@ -6,9 +6,9 @@ import { Dumbbell, TrendingUp } from "lucide-react";
 import { BentoGrid, BentoGridItem } from "@/components/ui/bento-grid";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { CountUp } from "@/components/reactbits/count-up";
-import { DecryptedText } from "@/components/reactbits/decrypted-text";
 import { VolumeChart } from "@/components/charts/volume-chart";
 import { BodyRadar } from "@/components/charts/body-radar";
+import { OneRepMaxTile, type OneRepMaxEntry } from "@/components/strength/one-rep-max-tile";
 import { prettyDate, todayIso } from "@/lib/date-utils";
 
 interface Overview {
@@ -17,22 +17,31 @@ interface Overview {
   workoutCount: number;
   totalSets: number;
   totalVolumeKg: number;
-  lastWorkout: { date: string; muscles: string[]; topSet: string; setCount: number; volumeKg: number } | null;
+  lastWorkout: {
+    date: string;
+    muscles: string[];
+    muscleSlugs: string[];
+    topSet: string;
+    setCount: number;
+    volumeKg: number;
+  } | null;
   recentPRs: Array<{ exercise: string; e1rm: number; date: string }>;
   radar: Array<{ slug: string; muscle: string; value: number }>;
   weeklyVolume: Array<{ week: string; volumeKg: number }>;
+  oneRepMaxes: OneRepMaxEntry[];
 }
 
 export default function DashboardPage() {
   const [data, setData] = useState<Overview | null>(null);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     fetch(`/api/analytics/overview?today=${todayIso()}`)
       .then((r) => r.json())
       .then((json) => (json.error ? setFailed(true) : setData(json)))
       .catch(() => setFailed(true));
-  }, []);
+  };
+  useEffect(load, []);
 
   if (failed) {
     return (
@@ -113,21 +122,18 @@ export default function DashboardPage() {
             <BentoGridItem
               className="border-hot-purple/30"
               header={
-                data.recentPRs.length > 0 ? (
-                  <ul className="flex flex-1 flex-col justify-center gap-3">
-                    {data.recentPRs.slice(0, 4).map((pr, i) => (
-                      <li key={pr.exercise} className="flex items-baseline justify-between gap-2">
-                        <DecryptedText text={pr.exercise} delay={i * 220} className="truncate text-[11px] text-zinc-300" />
-                        <span className="shrink-0 font-mono text-sm font-bold text-neon-purple">{pr.e1rm} kg</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <EmptyTile>PRs unlock as you log.</EmptyTile>
-                )
+                <OneRepMaxTile
+                  lifts={data.oneRepMaxes}
+                  muscleSlugs={data.lastWorkout?.muscleSlugs ?? []}
+                  onChange={load}
+                />
               }
-              title="PR Vault"
-              description="Best e1RM per lift"
+              title="1 Rep Max"
+              description={
+                data.lastWorkout
+                  ? `Recorded max · ${data.lastWorkout.muscles.join(" · ")}`
+                  : "Recorded max — main lifts"
+              }
             />
 
             <BentoGridItem
@@ -138,7 +144,7 @@ export default function DashboardPage() {
                 </div>
               }
               title="Body Progression"
-              description="Best e1RM across every muscle"
+              description="Estimated strength (e1RM) by muscle"
             />
 
             <BentoGridItem

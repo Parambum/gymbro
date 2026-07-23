@@ -10,6 +10,7 @@ export interface LoggedSet {
   weight: number;
   reps: number;
   setType: SetTypeUI;
+  supersetGroup: string | null;
   e1rm: number;
   isPR: boolean;
 }

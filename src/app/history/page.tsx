@@ -15,6 +15,7 @@ interface DaySet {
   weight: number;
   reps: number;
   setType: "WARMUP" | "WORKING" | "DROP" | "FAILURE";
+  supersetGroup: string | null;
   e1rm: number;
 }
 
@@ -135,6 +136,11 @@ export default function HistoryPage() {
                           <span className="text-zinc-200">
                             {s.weight} kg × {s.reps}
                           </span>
+                          {s.supersetGroup && (
+                            <span className="ml-3 rounded bg-hot-blue/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-neon-blue">
+                              SS {s.supersetGroup}
+                            </span>
+                          )}
                           <span
                             className={cn(
                               "ml-3 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider",

@@ -18,6 +18,8 @@ const SetSchema = new Schema(
     weight: { type: Number, required: true, min: 0, max: 2000 }, // kg
     reps: { type: Number, required: true, min: 1, max: 300 },
     setType: { type: String, enum: SET_TYPES, default: "WORKING" },
+    /** optional superset label ("A", "B", …) grouping sets across exercises */
+    supersetGroup: { type: String, default: null },
     e1rm: { type: Number, required: true, min: 0 },
     createdAt: { type: Date, default: Date.now },
   },
