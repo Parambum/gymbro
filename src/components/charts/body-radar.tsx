@@ -21,6 +21,7 @@ const SHORT: Record<string, string> = {
   chest: "Chest",
   back: "Back",
   shoulders: "Delts",
+  traps: "Traps",
   biceps: "Biceps",
   triceps: "Triceps",
   quads: "Quads",

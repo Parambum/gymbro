@@ -95,6 +95,19 @@ export const ZONES: ZoneDef[] = [
     camera: { position: [0.5, 1.75, 1.35], target: [0, 1.56, 0] },
   },
   {
+    slug: "traps",
+    parts: [
+      // angled slabs sloping from the neck base down to each shoulder
+      {
+        geom: { kind: "box", args: [0.2, 0.07, 0.11] },
+        position: [0.14, 1.55, -0.02],
+        rotation: [0, 0, -0.55],
+        mirror: true,
+      },
+    ],
+    camera: { position: [0.2, 1.92, 1.25], target: [0, 1.55, -0.02] },
+  },
+  {
     slug: "biceps",
     parts: [
       {

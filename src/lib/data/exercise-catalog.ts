@@ -8,6 +8,7 @@ export type MuscleGroupSlug =
   | "chest"
   | "back"
   | "shoulders"
+  | "traps"
   | "biceps"
   | "triceps"
   | "quads"
@@ -101,8 +102,19 @@ export const MUSCLE_GROUPS: MuscleGroupDef[] = [
       "Reverse Pec Deck",
       "Face Pull",
       "Upright Row",
-      "Dumbbell Shrug",
+    ],
+  },
+  {
+    slug: "traps",
+    name: "Traps",
+    accent: "#fbbf24",
+    exercises: [
       "Barbell Shrug",
+      "Dumbbell Shrug",
+      "Trap Bar Shrug",
+      "Smith Machine Shrug",
+      "Cable Shrug",
+      "Behind-the-Back Barbell Shrug",
     ],
   },
   {

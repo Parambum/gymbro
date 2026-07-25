@@ -14,10 +14,26 @@ import { cn } from "@/lib/utils";
 const SUPERSETS = ["A", "B", "C"] as const;
 
 const TAGS: Array<{ id: SetTypeUI; label: string; cls: string }> = [
-  { id: "WARMUP", label: "Warmup", cls: "border-zinc-600 text-zinc-400 data-[on=true]:bg-zinc-500/20" },
-  { id: "WORKING", label: "Working", cls: "border-hot-green/60 text-neon-green data-[on=true]:bg-hot-green/15" },
-  { id: "DROP", label: "Drop", cls: "border-hot-purple/60 text-neon-purple data-[on=true]:bg-hot-purple/20" },
-  { id: "FAILURE", label: "Failure", cls: "border-hot-crimson/60 text-neon-crimson data-[on=true]:bg-hot-crimson/15" },
+  {
+    id: "WARMUP",
+    label: "Warmup",
+    cls: "border-zinc-600 text-zinc-400 data-[on=true]:border-zinc-300 data-[on=true]:bg-zinc-500/25 data-[on=true]:text-zinc-100 data-[on=true]:shadow-[0_0_18px_-3px_rgba(228,228,231,0.5)]",
+  },
+  {
+    id: "WORKING",
+    label: "Working",
+    cls: "border-hot-green/60 text-neon-green data-[on=true]:border-hot-green data-[on=true]:bg-hot-green/20 data-[on=true]:shadow-neon-green",
+  },
+  {
+    id: "DROP",
+    label: "Drop",
+    cls: "border-hot-purple/60 text-neon-purple data-[on=true]:border-hot-purple data-[on=true]:bg-hot-purple/25 data-[on=true]:shadow-neon-purple",
+  },
+  {
+    id: "FAILURE",
+    label: "Failure",
+    cls: "border-hot-crimson/60 text-neon-crimson data-[on=true]:border-hot-crimson data-[on=true]:bg-hot-crimson/20 data-[on=true]:shadow-neon-crimson",
+  },
 ];
 
 const NO_SPIN =
@@ -284,7 +300,7 @@ export function SetForm({
             data-on={setType === t.id}
             onClick={() => setSetType(t.id)}
             className={cn(
-              "flex-1 rounded-lg border bg-transparent px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-all",
+              "flex-1 rounded-lg border bg-transparent px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-all data-[on=true]:scale-[1.04]",
               t.cls,
             )}
           >
@@ -299,7 +315,7 @@ export function SetForm({
         <button
           onClick={() => setSuperset(null)}
           data-on={superset === null}
-          className="rounded-md border border-edge bg-transparent px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-all data-[on=true]:border-zinc-500 data-[on=true]:text-zinc-200"
+          className="rounded-md border border-edge bg-transparent px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-all data-[on=true]:border-zinc-300 data-[on=true]:bg-zinc-500/25 data-[on=true]:text-zinc-100 data-[on=true]:shadow-[0_0_14px_-3px_rgba(228,228,231,0.45)]"
         >
           Off
         </button>
@@ -308,7 +324,7 @@ export function SetForm({
             key={label}
             onClick={() => setSuperset(label)}
             data-on={superset === label}
-            className="h-7 w-7 rounded-md border border-hot-blue/50 bg-transparent font-mono text-[11px] font-bold text-neon-blue transition-all data-[on=true]:bg-hot-blue/20"
+            className="h-7 w-7 rounded-md border border-hot-blue/50 bg-transparent font-mono text-[11px] font-bold text-neon-blue transition-all data-[on=true]:scale-110 data-[on=true]:border-hot-blue data-[on=true]:bg-hot-blue/25 data-[on=true]:text-white data-[on=true]:shadow-neon-blue"
           >
             {label}
           </button>
