@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { todayIso } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
@@ -52,8 +52,13 @@ export function Calendar({
 }) {
   const initial = new Date(`${selected}T00:00:00Z`);
   const [view, setView] = useState({ year: initial.getUTCFullYear(), month: initial.getUTCMonth() });
-  const today = todayIso();
   const weeks = buildMonth(view.year, view.month);
+
+  // "Today" depends on the viewer's timezone, so it can only be resolved after
+  // mount — deriving it during render made the server (UTC) and an IST client
+  // disagree about which cell gets the today-ring, breaking hydration.
+  const [today, setToday] = useState<string | null>(null);
+  useEffect(() => setToday(todayIso()), []);
 
   const shift = (delta: number) => {
     const m = view.month + delta;
@@ -85,7 +90,7 @@ export function Calendar({
       <div className="grid grid-cols-7 gap-1">
         {weeks.flat().map((cell) => {
           const isSelected = cell.iso === selected;
-          const isToday = cell.iso === today;
+          const isToday = today !== null && cell.iso === today;
           const hasLog = marked.has(cell.iso);
           return (
             <button

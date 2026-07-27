@@ -62,7 +62,7 @@ export default function AnalyticsPage() {
   const radarHasData = (radar ?? []).some((d) => d.value > 0);
 
   return (
-    <div className="bg-cyber-grid min-h-[calc(100vh-3.5rem)] px-4 py-8">
+    <div className="bg-cyber-grid min-h-[calc(100dvh-3.5rem)] px-4 py-8">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <h1 className="font-display text-2xl font-bold uppercase tracking-widest text-zinc-100">

@@ -80,7 +80,7 @@ export default function CardioPage() {
   }
 
   return (
-    <div className="bg-cyber-grid min-h-[calc(100vh-3.5rem)] px-4 py-8">
+    <div className="bg-cyber-grid min-h-[calc(100dvh-3.5rem)] px-4 py-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div>

@@ -20,7 +20,10 @@ interface DaySet {
 }
 
 export default function HistoryPage() {
-  const [selected, setSelected] = useState(todayIso());
+  // Resolved after mount, not during render: todayIso() reads the *viewer's*
+  // timezone, so a UTC server and an IST client disagree about the date and
+  // the rendered heading text mismatches, forcing a full hydration re-render.
+  const [selected, setSelected] = useState<string | null>(null);
   const [marked, setMarked] = useState<Set<string>>(new Set());
   const [sets, setSets] = useState<DaySet[] | null>(null);
 
@@ -39,10 +42,14 @@ export default function HistoryPage() {
       .catch(() => setSets([]));
   }, []);
 
+  useEffect(() => setSelected(todayIso()), []);
   useEffect(() => loadDates(), [loadDates]);
-  useEffect(() => loadDay(selected), [selected, loadDay]);
+  useEffect(() => {
+    if (selected) loadDay(selected);
+  }, [selected, loadDay]);
 
   const del = async (id: string) => {
+    if (!selected) return;
     setSets((prev) => prev?.filter((s) => s.id !== id) ?? prev); // optimistic
     try {
       await fetch(`/api/workouts?date=${selected}&setId=${id}`, { method: "DELETE" });
@@ -72,8 +79,19 @@ export default function HistoryPage() {
     };
   }, [sets]);
 
+  // one frame, until the effect above resolves the viewer's local date
+  if (!selected) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center px-4">
+        <span className="animate-pulse-glow font-mono text-xs uppercase tracking-[0.35em] text-zinc-500">
+          Loading history…
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-cyber-grid min-h-[calc(100vh-3.5rem)] px-4 py-8">
+    <div className="bg-cyber-grid min-h-[calc(100dvh-3.5rem)] px-4 py-8">
       <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[360px_1fr]">
         <section>
           <h1 className="mb-4 font-display text-2xl font-bold uppercase tracking-widest text-zinc-100">
