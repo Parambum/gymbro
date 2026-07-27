@@ -6,10 +6,88 @@
   color-scheme: dark;
 }
 
+html {
+  /* iOS: stop the page rubber-banding sideways on a stray wide child */
+  overflow-x: hidden;
+}
+
 body {
   background-color: #05050a;
   color: #d4d4dc;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
+  /* iOS Safari inflates font sizes on rotate without this */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* clears the iPhone home indicator beneath the fixed tab bar */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Media shouldn't be able to push the page sideways. Deliberately NOT
+   applied to svg/canvas: Leaflet positions its SVG overlay panes and
+   three.js sizes its own canvas — constraining either breaks them. */
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 767px) {
+  button,
+  a,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+/* ── Leaflet, themed ───────────────────────────────────────────────
+   Leaflet ships light-mode chrome: white zoom buttons and a white
+   attribution strip, both of which glare against the app surface. */
+.leaflet-container {
+  background: #0a0a14;
+  font-family: var(--font-mono), monospace;
+}
+
+.leaflet-control-zoom a,
+.leaflet-control-zoom a:hover {
+  background-color: #0e0e1c;
+  border-color: #1e1e33;
+  color: #a1a1aa;
+}
+.leaflet-control-zoom a:hover {
+  background-color: #16162b;
+  color: #22ff88;
+}
+.leaflet-bar {
+  border: 1px solid #1e1e33;
+  box-shadow: none;
+}
+
+.leaflet-control-attribution {
+  background: rgba(5, 5, 10, 0.82) !important;
+  color: #52525b;
+  font-size: 9px;
+  backdrop-filter: blur(4px);
+}
+.leaflet-control-attribution a {
+  color: #71717a;
+}
+
+/* the little tooltip on the start/finish markers */
+.leaflet-tooltip {
+  background: #0e0e1c;
+  border: 1px solid #1e1e33;
+  color: #d4d4d8;
+  box-shadow: none;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.leaflet-tooltip-top::before {
+  border-top-color: #1e1e33;
 }
 
 ::selection {

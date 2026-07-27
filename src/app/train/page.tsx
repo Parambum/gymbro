@@ -26,7 +26,9 @@ export default function TrainPage() {
   const select = useAnatomyStore((s) => s.select);
 
   return (
-    <div className="relative h-[calc(100vh-3.5rem)] w-full overflow-hidden">
+    // dvh (not vh) so mobile browser chrome collapsing doesn't clip the model;
+    // below md the fixed tab bar takes another 3.5rem + the home-indicator inset
+    <div className="relative h-[calc(100dvh-7rem-env(safe-area-inset-bottom))] w-full overflow-hidden md:h-[calc(100dvh-3.5rem)]">
       <AnatomyCanvas className="absolute inset-0 h-full w-full" />
 
       {/* usage hint */}
@@ -34,7 +36,10 @@ export default function TrainPage() {
         <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-400">
           Click a muscle to log it
         </p>
-        <p className="mt-1 font-mono text-[10px] text-zinc-600">drag to orbit · scroll to zoom</p>
+        <p className="mt-1 font-mono text-[10px] text-zinc-600">
+          drag to orbit · <span className="md:hidden">pinch</span>
+          <span className="hidden md:inline">scroll</span> to zoom
+        </p>
       </div>
 
       {/* keyboard/screen-reader path to the same navigation */}

@@ -7,7 +7,7 @@ import { ACTIVITY_META } from "./activity-meta";
 import { LiveTracker } from "./live-tracker";
 import { RouteMap } from "./route-map";
 import { parseGpx, GpxParseError } from "@/lib/gpx";
-import { ACTIVITY_TYPES, type ActivityType } from "@/models/Activity";
+import { ACTIVITY_TYPES, type ActivityType } from "@/lib/activity-types";
 import {
   elevationGainM,
   formatDistance,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MUSCLE_GROUPS } from "@/lib/data/exercise-catalog";
-import { ACTIVITY_TYPES, ACTIVITY_SOURCES } from "@/models/Activity";
+import { ACTIVITY_TYPES, ACTIVITY_SOURCES } from "@/lib/activity-types";
 
 const muscleSlugs = MUSCLE_GROUPS.map((g) => g.slug) as [string, ...string[]];
 

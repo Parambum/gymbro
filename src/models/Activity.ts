@@ -1,11 +1,11 @@
 import mongoose, { Schema, model, models, type Model, type InferSchemaType } from "mongoose";
+import { ACTIVITY_TYPES, ACTIVITY_SOURCES } from "@/lib/activity-types";
 
-export const ACTIVITY_TYPES = ["RUN", "RIDE", "WALK", "HIKE", "SWIM"] as const;
-export type ActivityType = (typeof ACTIVITY_TYPES)[number];
-
-/** How the activity got here — drives the badge on the feed card. */
-export const ACTIVITY_SOURCES = ["MANUAL", "GPX", "LIVE", "STRAVA"] as const;
-export type ActivitySource = (typeof ACTIVITY_SOURCES)[number];
+// The enums live in @/lib/activity-types so client components can import them
+// without pulling Mongoose into the browser bundle. Re-exported here purely as
+// a convenience for server code that already has the model in scope.
+export { ACTIVITY_TYPES, ACTIVITY_SOURCES };
+export type { ActivityType, ActivitySource } from "@/lib/activity-types";
 
 /** One kilometre of the effort, precomputed at write time. */
 const SplitSchema = new Schema(

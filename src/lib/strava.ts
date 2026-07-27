@@ -1,4 +1,4 @@
-import type { ActivityType } from "@/models/Activity";
+import type { ActivityType } from "@/lib/activity-types";
 
 /**
  * Strava API v3 client.

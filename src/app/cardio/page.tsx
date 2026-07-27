@@ -12,7 +12,7 @@ import { StravaPanel } from "@/components/cardio/strava-panel";
 import { ACTIVITY_META } from "@/components/cardio/activity-meta";
 import { formatDistance, formatDuration, formatPace } from "@/lib/math/geo";
 import { todayIso } from "@/lib/date-utils";
-import { ACTIVITY_TYPES, type ActivityType } from "@/models/Activity";
+import { ACTIVITY_TYPES, type ActivityType } from "@/lib/activity-types";
 
 interface Stats {
   hasData: boolean;

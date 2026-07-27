@@ -16,7 +16,7 @@ import {
   type LatLng,
 } from "@/lib/math/geo";
 import { prettyDate } from "@/lib/date-utils";
-import type { ActivityType } from "@/models/Activity";
+import type { ActivityType } from "@/lib/activity-types";
 
 interface ActivityDetail {
   id: string;

@@ -12,7 +12,7 @@ export default async function LandingPage() {
   const primaryLabel = session?.user ? "Enter the gym →" : "Start training →";
 
   return (
-    <div className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center overflow-hidden bg-void px-4">
+    <div className="relative flex min-h-[calc(100dvh-3.5rem)] flex-col items-center justify-center overflow-hidden bg-void px-4 py-12 sm:py-16">
       <BackgroundBeams />
 
       <div className="relative z-10 flex max-w-3xl flex-col items-center text-center">
@@ -22,7 +22,7 @@ export default async function LandingPage() {
           Serious tool for serious progression
         </p>
 
-        <h1 className="mt-4 font-display text-6xl font-bold uppercase tracking-tight text-zinc-50 md:text-8xl">
+        <h1 className="mt-4 font-display text-5xl font-bold uppercase tracking-tight text-zinc-50 sm:text-6xl md:text-8xl">
           <DecryptedText text="GYMBRO" speed={40} />
         </h1>
 
@@ -33,7 +33,7 @@ export default async function LandingPage() {
           should prove it.
         </p>
 
-        <div className="mt-10 flex items-center gap-3">
+        <div className="mt-10 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
           <HoverBorderGradient as="div" containerClassName="rounded-full" className="p-0">
             <Link
               href={primaryHref}
@@ -52,7 +52,7 @@ export default async function LandingPage() {
           )}
         </div>
 
-        <dl className="mt-16 grid grid-cols-3 gap-8 border-t border-edge/60 pt-8">
+        <dl className="mt-12 grid w-full grid-cols-3 gap-4 border-t border-edge/60 pt-8 sm:mt-16 sm:gap-8">
           {[
             { value: String(MUSCLE_GROUPS.length), label: "Clickable muscle zones" },
             { value: `${TOTAL_EXERCISES}+`, label: "Base exercises + your own" },

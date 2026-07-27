@@ -1,5 +1,5 @@
 import { Bike, Footprints, Mountain, PersonStanding, Waves } from "lucide-react";
-import type { ActivityType } from "@/models/Activity";
+import type { ActivityType } from "@/lib/activity-types";
 
 /**
  * Per-discipline presentation. Kept in one place so the feed, the log modal

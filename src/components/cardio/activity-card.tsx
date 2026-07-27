@@ -5,7 +5,7 @@ import { Map as MapIcon, Trash2 } from "lucide-react";
 import { ACTIVITY_META, SOURCE_LABEL } from "./activity-meta";
 import { formatDistance, formatDuration, formatPace, speedKph } from "@/lib/math/geo";
 import { prettyDate } from "@/lib/date-utils";
-import type { ActivityType } from "@/models/Activity";
+import type { ActivityType } from "@/lib/activity-types";
 
 export interface FeedActivity {
   id: string;

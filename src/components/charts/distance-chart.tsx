@@ -29,7 +29,9 @@ export function DistanceChart({ series, height = 200 }: { series: DistancePoint[
           tickLine={false}
         />
         <YAxis
-          tickFormatter={(v: number) => `${v}k`}
+          // values are already kilometres — a "k" suffix would read as
+          // thousands and make a 20 km week look like 20,000
+          tickFormatter={(v: number) => `${v}`}
           tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
           axisLine={false}
           tickLine={false}
