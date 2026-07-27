@@ -16,7 +16,7 @@ import {
   type LatLng,
   type TrackPoint,
 } from "@/lib/math/geo";
-import { todayIso } from "@/lib/date-utils";
+import { localIso, todayIso } from "@/lib/date-utils";
 
 type Mode = "manual" | "gpx" | "live";
 
@@ -226,7 +226,11 @@ function ActivityForm({
 }) {
   const [type, setType] = useState<ActivityType>("RUN");
   const [name, setName] = useState(draft?.suggestedName ?? "");
-  const [date, setDate] = useState(draft?.startedAt ? draft.startedAt.slice(0, 10) : todayIso());
+  // startedAt is a UTC instant; slicing its ISO string would stamp a 1 a.m.
+  // IST run as the previous day. The calendar day must be the athlete's.
+  const [date, setDate] = useState(
+    draft?.startedAt ? localIso(new Date(draft.startedAt)) : todayIso(),
+  );
   const [km, setKm] = useState(draft ? (draft.distanceM / 1000).toFixed(2) : "");
   const [hh, setHh] = useState(draft ? String(Math.floor(draft.movingTimeS / 3600)) : "");
   const [mm, setMm] = useState(draft ? String(Math.floor((draft.movingTimeS % 3600) / 60)) : "");

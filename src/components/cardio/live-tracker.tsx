@@ -40,10 +40,14 @@ export function LiveTracker({
   const [points, setPoints] = useState<TrackPoint[]>([]);
   const [distanceM, setDistanceM] = useState(0);
   const [elapsedS, setElapsedS] = useState(0);
+  /** fatal — tracking cannot continue (permission, no API, insecure origin) */
   const [error, setError] = useState<string | null>(null);
+  /** transient — the fix dropped out but the run is still live */
+  const [signalLost, setSignalLost] = useState(false);
   const [accuracy, setAccuracy] = useState<number | null>(null);
 
   const watchId = useRef<number | null>(null);
+  const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
   const segmentStart = useRef<number | null>(null); // ms epoch of current running segment
   const bankedMs = useRef(0); // moving time completed before the current segment
   const lastPoint = useRef<TrackPoint | null>(null);
@@ -69,6 +73,7 @@ export function LiveTracker({
 
     const { latitude, longitude, altitude, accuracy: acc } = pos.coords;
     setAccuracy(acc);
+    setSignalLost(false); // a fix arrived — we're back
     if (acc > ACCURACY_LIMIT_M) return;
 
     const t = Math.floor(movingMs() / 1000);
@@ -92,20 +97,35 @@ export function LiveTracker({
     setPoints((p) => [...p, next]);
   }, [movingMs]);
 
+  /**
+   * Only a denied permission is fatal.
+   *
+   * POSITION_UNAVAILABLE and TIMEOUT are routine on a real run — a tunnel, a
+   * multi-storey car park, a street of tall buildings. Ending the session on
+   * one of those would throw away the whole effort, so the run keeps its
+   * clock and its track and simply flags that the signal dropped.
+   */
   const handleGeoError = useCallback((err: GeolocationPositionError) => {
-    setError(
-      err.code === err.PERMISSION_DENIED
-        ? "Location permission denied. Enable it for this site, or log the run manually."
-        : err.code === err.POSITION_UNAVAILABLE
-          ? "No GPS signal. Step outside and try again."
-          : "Could not read your location.",
-    );
-    setStatus("idle");
+    if (err.code === err.PERMISSION_DENIED) {
+      setError("Location permission denied. Enable it for this site, or log the run manually.");
+      setStatus("idle");
+      return;
+    }
+    setSignalLost(true);
   }, []);
 
   const startWatch = useCallback(() => {
     if (!("geolocation" in navigator)) {
       setError("This browser has no Geolocation support — log the run manually instead.");
+      return false;
+    }
+    // Browsers only expose GPS on a secure origin. Testing the dev server from
+    // a phone over the LAN (http://192.168.x.x:3000) silently yields nothing,
+    // so name the reason instead of spinning forever on "waiting for a fix".
+    if (!window.isSecureContext) {
+      setError(
+        "GPS needs a secure connection (https, or localhost). Open the deployed site over https to track a run here.",
+      );
       return false;
     }
     if (watchId.current === null) {
@@ -125,14 +145,55 @@ export function LiveTracker({
     }
   }, []);
 
-  // release the GPS watch if the component unmounts mid-run
-  useEffect(() => stopWatch, [stopWatch]);
+  /**
+   * Hold a screen wake lock while running.
+   *
+   * A locked screen suspends `watchPosition` on both iOS and Android, which
+   * would quietly end the run the moment the phone goes in a pocket. The lock
+   * is dropped whenever the tab is hidden, so it's re-acquired on return.
+   */
+  const acquireWakeLock = useCallback(async () => {
+    try {
+      const nav = navigator as Navigator & {
+        wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
+      };
+      if (nav.wakeLock) wakeLock.current = await nav.wakeLock.request("screen");
+    } catch {
+      // not supported, or denied — tracking still works while the screen is on
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    wakeLock.current?.release().catch(() => {});
+    wakeLock.current = null;
+  }, []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && statusRef.current === "running") {
+        void acquireWakeLock();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [acquireWakeLock]);
+
+  // release the GPS watch and the wake lock if we unmount mid-run
+  useEffect(
+    () => () => {
+      stopWatch();
+      releaseWakeLock();
+    },
+    [stopWatch, releaseWakeLock],
+  );
 
   const start = () => {
     setError(null);
+    setSignalLost(false);
     if (!startWatch()) return;
     segmentStart.current = Date.now();
     setStatus("running");
+    void acquireWakeLock();
   };
 
   const pause = () => {
@@ -140,11 +201,13 @@ export function LiveTracker({
     segmentStart.current = null;
     setStatus("paused");
     setElapsedS(Math.floor(bankedMs.current / 1000));
+    releaseWakeLock();
   };
 
   const resume = () => {
     segmentStart.current = Date.now();
     setStatus("running");
+    void acquireWakeLock();
   };
 
   const finish = () => {
@@ -152,6 +215,7 @@ export function LiveTracker({
     bankedMs.current = totalS * 1000;
     segmentStart.current = null;
     stopWatch();
+    releaseWakeLock();
     setStatus("done");
     onFinish({ track: points, distanceM: Math.round(distanceM), movingTimeS: Math.max(1, totalS) });
   };
@@ -178,9 +242,23 @@ export function LiveTracker({
       <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-zinc-600">
         <span className="flex items-center gap-1.5">
           <Satellite
-            className={`h-3 w-3 ${status === "running" ? "animate-pulse-glow text-neon-green" : "text-zinc-700"}`}
+            className={`h-3 w-3 ${
+              signalLost && status === "running"
+                ? "animate-pulse-glow text-neon-amber"
+                : status === "running"
+                  ? "animate-pulse-glow text-neon-green"
+                  : "text-zinc-700"
+            }`}
           />
-          {status === "running" ? "tracking" : status === "paused" ? "paused" : "gps idle"}
+          <span className={signalLost && status === "running" ? "text-neon-amber" : undefined}>
+            {status === "running"
+              ? signalLost
+                ? "signal lost — still timing"
+                : "tracking"
+              : status === "paused"
+                ? "paused"
+                : "gps idle"}
+          </span>
         </span>
         <span>
           {points.length} fixes{accuracy != null ? ` · ±${Math.round(accuracy)} m` : ""}

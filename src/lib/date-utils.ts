@@ -1,8 +1,12 @@
 /** Pure yyyy-mm-dd helpers — no timezone drift, safe on client and server. */
 
-export function todayIso(): string {
-  const d = new Date();
+/** yyyy-mm-dd for a Date, in the *viewer's* zone (never UTC). */
+export function localIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function todayIso(): string {
+  return localIso(new Date());
 }
 
 export function isValidIso(s: string): boolean {
