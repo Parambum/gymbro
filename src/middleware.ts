@@ -11,5 +11,13 @@ export default middleware(() => {
 });
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/train/:path*", "/analytics/:path*", "/history/:path*", "/login", "/signup"],
+  matcher: [
+    "/dashboard/:path*",
+    "/train/:path*",
+    "/cardio/:path*",
+    "/analytics/:path*",
+    "/history/:path*",
+    "/login",
+    "/signup",
+  ],
 };

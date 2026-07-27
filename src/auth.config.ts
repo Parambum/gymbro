@@ -8,7 +8,7 @@ import type { NextAuthConfig } from "next-auth";
  * Route protection and the JWT↔session id plumbing live here because they
  * are shared by both the edge middleware and the Node server.
  */
-const PROTECTED_PREFIXES = ["/dashboard", "/train", "/analytics", "/history"];
+const PROTECTED_PREFIXES = ["/dashboard", "/train", "/cardio", "/analytics", "/history"];
 
 export const authConfig = {
   trustHost: true,

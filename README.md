@@ -1,19 +1,48 @@
 # GYMBRO
 
-**A serious tool for serious progression.** Multi-user strength-training tracker:
-click a muscle on a 3D anatomy model to log it, build your own exercises, and
-watch true progress unfold through Epley e1RM analytics — never absolute weight,
-which lies about volume gains.
+**A serious tool for serious progression.** Multi-user training tracker: click a
+muscle on a 3D anatomy model to log a lift, build your own exercises, and watch
+true progress unfold through Epley e1RM analytics — never absolute weight, which
+lies about volume gains. Plus a full cardio side: GPS-tracked runs, routes on a
+map, and kilometre splits.
 
 ```
 Next.js 15 (App Router) · React 19 · TypeScript strict · Tailwind
 Auth.js v5 (credentials + optional Google) · MongoDB + Mongoose
 React Three Fiber + drei + postprocessing (bloom) · motion (Framer)
-Recharts · Zustand · Zod · bcryptjs
+Leaflet + OpenStreetMap/CARTO · Recharts · Zustand · Zod · bcryptjs
 ```
 
-> **Phase 1 — Gym/Strength only.** Cardio/running is intentionally out of scope
-> for this phase; the whole surface is focused on perfecting strength tracking.
+> **Phase 1 — Strength.** 3D click-to-log, custom exercises, e1RM analytics.
+>
+> **Phase 2 — Cardio.** Runs, rides, walks, hikes and swims at `/cardio`: live
+> GPS tracking, GPX import, route maps, per-kilometre splits, personal bests,
+> and optional Strava import. Both sides share one account and the same
+> `yyyy-mm-dd` local-day convention, so one training day can hold both.
+
+## Cardio
+
+Three ways in, none of which need an API key:
+
+| Source | How |
+|---|---|
+| **Live GPS** | `watchPosition` records the route as you run. Fixes worse than 50 m accuracy, and jumps implying >40 m/s, are discarded; pausing stops the clock so pace stays honest. |
+| **GPX import** | Drop in an export from Garmin, Coros, Apple Health or Strava. Distance, elevation and splits are derived from the track. |
+| **Manual** | Distance + duration. A treadmill run is still a run. |
+
+Maps are Leaflet over OpenStreetMap/CARTO dark tiles — **no Mapbox/Google key
+required**. Splits are computed by interpolating the exact kilometre boundary
+between GPS samples, so they don't drift by the length of one fix. Routes are
+simplified (Ramer–Douglas–Peucker, 8 m tolerance) before storage.
+
+**Strava import is optional.** Set `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET`
+to reveal the connect panel; leave them blank and the entire integration is
+hidden, exactly like the Google provider. Sync is incremental and idempotent
+(upsert keyed on `userId + stravaId`), and non-cardio Strava entries —
+WeightTraining, Yoga — are skipped so they never pollute the cardio feed.
+
+> Anything a client claims is recomputed server-side when a GPS track is
+> present: post a 200 km "run" with a 3 km track and it is stored as 3 km.
 
 ---
 
@@ -129,6 +158,15 @@ the same `select()` for keyboard / screen-reader users.
 - **`PersonalRecord`-style check**: each non-warmup set is compared against the
   standing max e1RM for that exercise via aggregation before insert.
 - **`Exercise`** holds only user custom additions, unique per `(userId, muscle, name)`.
+- **`Activity` is one doc per effort**, not per day — a run is a single
+  continuous thing with its own route and clock, unlike a training day that
+  accumulates sets. Distance, pace, elevation and splits are denormalized at
+  write time, matching the `e1rm` contract above. Feed queries ride
+  `{ userId, startedAt: -1 }`; the Strava dedupe index is partial so manually
+  logged efforts (`stravaId: null`) never collide.
+- **`StravaAccount` is its own collection**, not fields on `User` — the user doc
+  is read on every authenticated request and has no business carrying OAuth
+  tokens. Disconnecting deletes the row; imported activities are kept.
 
 ## Auth model
 
