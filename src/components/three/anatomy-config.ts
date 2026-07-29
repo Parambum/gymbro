@@ -132,6 +132,19 @@ export const ZONES: ZoneDef[] = [
     camera: { position: [0.95, 1.45, -0.95], target: [0.3, 1.4, 0] },
   },
   {
+    slug: "forearms",
+    parts: [
+      // the lower-arm segment, below the elbow
+      {
+        geom: { kind: "capsule", args: [0.045, 0.19, 2, 6] },
+        position: [0.35, 1.1, 0.03],
+        rotation: [0.12, 0, -0.08],
+        mirror: true,
+      },
+    ],
+    camera: { position: [0.85, 1.15, 1.05], target: [0.35, 1.05, 0.02] },
+  },
+  {
     slug: "quads",
     parts: [
       { geom: { kind: "capsule", args: [0.08, 0.32, 2, 7] }, position: [0.115, 0.72, 0.045], mirror: true },

@@ -1,7 +1,7 @@
 /**
- * The pre-populated exercise catalog: 9 muscle groups × 20 proven variations.
- * Single source of truth — the Prisma seed, the 3D anatomy hub, and the
- * client-side picker all import from here.
+ * The pre-populated exercise catalog: muscle groups × proven variations.
+ * Single source of truth — the 3D anatomy hub, the logging picker, analytics,
+ * and the Mongoose schemas all derive their muscle groups from here.
  */
 
 export type MuscleGroupSlug =
@@ -11,6 +11,7 @@ export type MuscleGroupSlug =
   | "traps"
   | "biceps"
   | "triceps"
+  | "forearms"
   | "quads"
   | "hams-glutes"
   | "calves"
@@ -169,6 +170,20 @@ export const MUSCLE_GROUPS: MuscleGroupDef[] = [
       "JM Press",
       "Tate Press",
       "Board Press",
+    ],
+  },
+  {
+    slug: "forearms",
+    name: "Forearms",
+    accent: "#e879f9",
+    exercises: [
+      "Barbell Wrist Curl",
+      "Barbell Reverse Wrist Curl",
+      "Dumbbell Wrist Curl",
+      "Behind-the-Back Wrist Curl",
+      "Wrist Roller",
+      "Farmer's Carry",
+      "Sam Sulek Forearm Curls",
     ],
   },
   {
