@@ -9,6 +9,7 @@ import { MagneticButton } from "@/components/reactbits/magnetic-button";
 import { DecryptedText } from "@/components/reactbits/decrypted-text";
 import { todayIso } from "@/lib/date-utils";
 import { isMainLift } from "@/lib/data/main-lifts";
+import { groupDropSets, nextSetLabel } from "@/lib/set-grouping";
 import { cn } from "@/lib/utils";
 
 const SUPERSETS = ["A", "B", "C"] as const;
@@ -181,6 +182,8 @@ export function SetForm({
   );
 
   const forExercise = sets.filter((s) => s.exercise === exercise);
+  const setGroups = groupDropSets(forExercise);
+  const nextLabel = nextSetLabel(forExercise, setType);
   const projected = roundE1RM(epleyE1RM(weight, Math.max(1, reps)));
   const canLog = weight >= 0 && reps >= 1 && !saving;
 
@@ -335,9 +338,11 @@ export function SetForm({
         <div className="flex items-center justify-between">
           <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
             {willRecordOneRepMax ? (
-              <span className="text-neon-purple">Set {forExercise.length + 1} · records 1RM</span>
+              <span className="text-neon-purple">Set {nextLabel.number} · records 1RM</span>
+            ) : nextLabel.isDrop ? (
+              <span className="text-neon-purple">Drop of set {nextLabel.number} · Est. 1RM</span>
             ) : (
-              <>Set {forExercise.length + 1} · Est. 1RM</>
+              <>Set {nextLabel.number} · Est. 1RM</>
             )}
           </span>
           <span className="font-mono text-lg font-bold tabular-nums" style={{ color: willRecordOneRepMax ? "#a78bfa" : accent }}>
@@ -373,47 +378,58 @@ export function SetForm({
 
       <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
         <AnimatePresence initial={false}>
-          {[...forExercise].reverse().map((s) => (
-            <motion.li
-              key={s.id}
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, height: 0 }}
-              className="group flex items-center gap-2 rounded-lg border border-edge/60 bg-panel/70 px-3 py-2 font-mono text-xs"
-            >
-              <span className="text-zinc-500">#{s.setNumber}</span>
-              <span className="flex-1 text-zinc-200">
-                {s.weight} kg × {s.reps}
-              </span>
-              {s.supersetGroup && (
-                <span className="rounded bg-hot-blue/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-neon-blue">
-                  SS {s.supersetGroup}
-                </span>
-              )}
-              <span
+          {[...setGroups]
+            .reverse()
+            .flatMap((g) => [
+              { s: g.parent, isDrop: false, number: g.number },
+              ...g.drops.map((d) => ({ s: d, isDrop: true, number: g.number })),
+            ])
+            .map(({ s, isDrop, number }) => (
+              <motion.li
+                key={s.id}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, height: 0 }}
                 className={cn(
-                  "rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
-                  s.setType === "WORKING" && "bg-hot-green/10 text-neon-green",
-                  s.setType === "WARMUP" && "bg-zinc-500/10 text-zinc-400",
-                  s.setType === "DROP" && "bg-hot-purple/15 text-neon-purple",
-                  s.setType === "FAILURE" && "bg-hot-crimson/10 text-neon-crimson",
+                  "group flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-xs",
+                  isDrop
+                    ? "ml-5 border-hot-purple/25 bg-hot-purple/5"
+                    : "border-edge/60 bg-panel/70",
                 )}
               >
-                {s.setType}
-              </span>
-              <span className="tabular-nums text-zinc-400">
-                {s.isPR && <span className="mr-1 text-neon-green">◆</span>}
-                {s.e1rm} e1RM
-              </span>
-              <button
-                onClick={() => del(s.id)}
-                aria-label={`delete set ${s.setNumber}`}
-                className="ml-1 rounded p-1 text-zinc-600 opacity-0 transition-all hover:text-neon-crimson group-hover:opacity-100 focus:opacity-100"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </motion.li>
-          ))}
+                <span className="text-zinc-500">{isDrop ? "↳" : `#${number}`}</span>
+                <span className="flex-1 text-zinc-200">
+                  {s.weight} kg × {s.reps}
+                </span>
+                {s.supersetGroup && (
+                  <span className="rounded bg-hot-blue/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-neon-blue">
+                    SS {s.supersetGroup}
+                  </span>
+                )}
+                <span
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
+                    s.setType === "WORKING" && "bg-hot-green/10 text-neon-green",
+                    s.setType === "WARMUP" && "bg-zinc-500/10 text-zinc-400",
+                    s.setType === "DROP" && "bg-hot-purple/15 text-neon-purple",
+                    s.setType === "FAILURE" && "bg-hot-crimson/10 text-neon-crimson",
+                  )}
+                >
+                  {s.setType}
+                </span>
+                <span className="tabular-nums text-zinc-400">
+                  {s.isPR && <span className="mr-1 text-neon-green">◆</span>}
+                  {s.e1rm} e1RM
+                </span>
+                <button
+                  onClick={() => del(s.id)}
+                  aria-label={`delete ${isDrop ? "drop" : "set"} ${number}`}
+                  className="ml-1 rounded p-1 text-zinc-600 opacity-0 transition-all hover:text-neon-crimson group-hover:opacity-100 focus:opacity-100"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </motion.li>
+            ))}
         </AnimatePresence>
         {forExercise.length === 0 && (
           <li className="px-3 py-6 text-center font-mono text-[11px] text-zinc-600">

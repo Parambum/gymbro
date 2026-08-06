@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Trash2 } from "lucide-react";
 import { Calendar } from "@/components/history/calendar";
 import { groupBySlug } from "@/lib/data/exercise-catalog";
+import { groupDropSets } from "@/lib/set-grouping";
 import { prettyDate, todayIso } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 
@@ -72,8 +73,10 @@ export default function HistoryPage() {
   const summary = useMemo(() => {
     if (!sets || sets.length === 0) return null;
     const working = sets.filter((s) => s.setType !== "WARMUP");
+    // drops fold into their parent, so they don't count as separate sets
+    const setCount = sets.filter((s) => s.setType !== "DROP").length;
     return {
-      sets: sets.length,
+      sets: setCount,
       volume: Math.round(working.reduce((n, s) => n + s.weight * s.reps, 0)),
       muscles: [...new Set(sets.map((s) => groupBySlug(s.muscleGroup)?.name ?? s.muscleGroup))],
     };
@@ -147,39 +150,50 @@ export default function HistoryPage() {
                       {group?.name ?? slug}
                     </h3>
                     <ul className="space-y-1.5">
-                      {list.map((s, i) => (
-                        <li key={s.id} className="group flex items-center justify-between font-mono text-xs">
-                          <span className="text-zinc-500">#{i + 1}</span>
-                          <span className="flex-1 pl-3 text-zinc-300">{s.exercise}</span>
-                          <span className="text-zinc-200">
-                            {s.weight} kg × {s.reps}
-                          </span>
-                          {s.supersetGroup && (
-                            <span className="ml-3 rounded bg-hot-blue/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-neon-blue">
-                              SS {s.supersetGroup}
-                            </span>
-                          )}
-                          <span
+                      {groupDropSets(list, (d, p) => d.exercise === p.exercise)
+                        .flatMap((g) => [
+                          { s: g.parent, isDrop: false, number: g.number },
+                          ...g.drops.map((d) => ({ s: d, isDrop: true, number: g.number })),
+                        ])
+                        .map(({ s, isDrop, number }) => (
+                          <li
+                            key={s.id}
                             className={cn(
-                              "ml-3 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
-                              s.setType === "WORKING" && "bg-hot-green/10 text-neon-green",
-                              s.setType === "WARMUP" && "bg-zinc-500/10 text-zinc-400",
-                              s.setType === "DROP" && "bg-hot-purple/15 text-neon-purple",
-                              s.setType === "FAILURE" && "bg-hot-crimson/10 text-neon-crimson",
+                              "group flex items-center justify-between font-mono text-xs",
+                              isDrop && "pl-5",
                             )}
                           >
-                            {s.setType}
-                          </span>
-                          <span className="ml-3 w-16 text-right tabular-nums text-zinc-400">{s.e1rm} e1RM</span>
-                          <button
-                            onClick={() => del(s.id)}
-                            aria-label={`delete ${s.exercise} set ${i + 1}`}
-                            className="ml-2 rounded p-1 text-zinc-600 opacity-0 transition-all hover:text-neon-crimson group-hover:opacity-100 focus:opacity-100"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </li>
-                      ))}
+                            <span className="text-zinc-500">{isDrop ? "↳" : `#${number}`}</span>
+                            <span className="flex-1 pl-3 text-zinc-300">{s.exercise}</span>
+                            <span className="text-zinc-200">
+                              {s.weight} kg × {s.reps}
+                            </span>
+                            {s.supersetGroup && (
+                              <span className="ml-3 rounded bg-hot-blue/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-neon-blue">
+                                SS {s.supersetGroup}
+                              </span>
+                            )}
+                            <span
+                              className={cn(
+                                "ml-3 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
+                                s.setType === "WORKING" && "bg-hot-green/10 text-neon-green",
+                                s.setType === "WARMUP" && "bg-zinc-500/10 text-zinc-400",
+                                s.setType === "DROP" && "bg-hot-purple/15 text-neon-purple",
+                                s.setType === "FAILURE" && "bg-hot-crimson/10 text-neon-crimson",
+                              )}
+                            >
+                              {s.setType}
+                            </span>
+                            <span className="ml-3 w-16 text-right tabular-nums text-zinc-400">{s.e1rm} e1RM</span>
+                            <button
+                              onClick={() => del(s.id)}
+                              aria-label={`delete ${s.exercise} ${isDrop ? "drop" : "set"} ${number}`}
+                              className="ml-2 rounded p-1 text-zinc-600 opacity-0 transition-all hover:text-neon-crimson group-hover:opacity-100 focus:opacity-100"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </li>
+                        ))}
                     </ul>
                   </div>
                 );

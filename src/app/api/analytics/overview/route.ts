@@ -77,7 +77,8 @@ export async function GET(req: Request) {
         muscles: lastMuscleSlugs.map((slug) => groupBySlug(slug)?.name ?? slug),
         muscleSlugs: lastMuscleSlugs,
         topSet: `${top.exercise} — ${top.weight} kg × ${top.reps}`,
-        setCount: last.sets.length,
+        // drops fold into their parent set, so they don't count separately
+        setCount: last.sets.filter((s) => s.setType !== "DROP").length,
         volumeKg: Math.round(working.reduce((sum, s) => sum + volumeOf(s), 0)),
       };
     }
