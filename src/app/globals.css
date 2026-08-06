@@ -4,6 +4,10 @@
 
 :root {
   color-scheme: dark;
+  /* Helvetica everywhere. Real Helvetica/Neue where installed (macOS, iOS);
+     Arial — its metric twin — as the near-identical fallback elsewhere. */
+  --font-display: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 html {

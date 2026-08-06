@@ -1,18 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { auth } from "@/auth";
 import { Nav } from "@/components/nav";
 import "./globals.css";
-
-const display = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-display",
-});
-
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-});
 
 export const metadata: Metadata = {
   title: "GymBro — Strength Progression Tracker",
@@ -38,7 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" className="dark">
-      <body className={`${display.variable} ${mono.variable} font-display antialiased`}>
+      <body className="font-display antialiased">
         <div className="scanline-overlay" aria-hidden />
         <Nav user={session?.user ?? null} />
         {/* clear the fixed mobile tab bar (56px + safe area); desktop has none */}
