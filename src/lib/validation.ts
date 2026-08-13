@@ -20,16 +20,23 @@ export const CustomExerciseSchema = z.object({
   muscleGroup: z.enum(muscleSlugs),
 });
 
-export const LogSetSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be yyyy-mm-dd"),
-  exercise: z.string().trim().min(1).max(80),
-  muscleGroup: z.enum(muscleSlugs),
-  weight: z.number().min(0).max(2000),
-  reps: z.number().int().min(1).max(300),
-  setType: z.enum(["WARMUP", "WORKING", "DROP", "FAILURE"]).default("WORKING"),
-  /** superset label (e.g. "A"), linking this set to others in the same group */
-  supersetGroup: z.string().trim().max(2).optional().nullable(),
-});
+export const LogSetSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be yyyy-mm-dd"),
+    exercise: z.string().trim().min(1).max(80),
+    muscleGroup: z.enum(muscleSlugs),
+    /** how the set is measured: weight×reps, reps-only (bodyweight), or a hold */
+    mode: z.enum(["weight-reps", "reps", "time"]).default("weight-reps"),
+    weight: z.number().min(0).max(2000).default(0),
+    reps: z.number().int().min(0).max(1000).default(0),
+    durationSec: z.number().int().min(1).max(86_400).optional().nullable(),
+    setType: z.enum(["WARMUP", "WORKING", "DROP", "FAILURE"]).default("WORKING"),
+    /** superset label (e.g. "A"), linking this set to others in the same group */
+    supersetGroup: z.string().trim().max(2).optional().nullable(),
+  })
+  .refine((v) => (v.mode === "time" ? (v.durationSec ?? 0) >= 1 : v.reps >= 1), {
+    message: "Enter reps — or a hold time for timed exercises",
+  });
 
 export const OneRepMaxSchema = z.object({
   exercise: z.string().trim().min(1).max(80),

@@ -23,27 +23,43 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { date, exercise, muscleGroup, weight, reps, setType, supersetGroup } = parsed.data;
-  const e1rm = roundE1RM(epleyE1RM(weight, reps));
+  const { date, exercise, muscleGroup, mode, weight, reps, durationSec, setType, supersetGroup } =
+    parsed.data;
+  // e1RM is only meaningful for external load; bodyweight/timed sets carry 0.
+  const e1rm = mode === "weight-reps" ? roundE1RM(epleyE1RM(weight, reps)) : 0;
 
   try {
     await connectDB();
     const uid = new Types.ObjectId(userId);
 
-    // standing best e1RM for this exercise (working sets only) → PR check
-    const [prior] = await Workout.aggregate<{ best: number }>([
+    // standing bests for this exercise (working sets) → mode-appropriate PR
+    const [prior] = await Workout.aggregate<{ e1rm: number; reps: number; dur: number }>([
       { $match: { userId: uid } },
       { $unwind: "$sets" },
       { $match: { "sets.exercise": exercise, "sets.setType": { $ne: "WARMUP" } } },
-      { $group: { _id: null, best: { $max: "$sets.e1rm" } } },
+      {
+        $group: {
+          _id: null,
+          e1rm: { $max: "$sets.e1rm" },
+          reps: { $max: "$sets.reps" },
+          dur: { $max: "$sets.durationSec" },
+        },
+      },
     ]);
-    const isPR = setType !== "WARMUP" && (!prior || e1rm > prior.best);
+    let isPR = false;
+    if (setType !== "WARMUP") {
+      if (mode === "time") isPR = !prior || (durationSec ?? 0) > (prior.dur ?? 0);
+      else if (mode === "reps") isPR = !prior || reps > (prior.reps ?? 0);
+      else isPR = !prior || e1rm > (prior.e1rm ?? 0);
+    }
 
     const setDoc = {
       exercise,
       muscleGroup,
+      mode,
       weight,
       reps,
+      durationSec: durationSec ?? null,
       setType,
       supersetGroup: supersetGroup || null,
       e1rm,
@@ -58,11 +74,10 @@ export async function POST(req: Request) {
     const saved = workout.sets[workout.sets.length - 1];
     const setNumber = workout.sets.filter((s) => s.exercise === exercise).length;
 
-    // Recorded 1RM: a true single (1 rep) on a main lift IS the 1RM — record
-    // it when it beats the standing mark. No estimation involved.
+    // Recorded 1RM: a true single (1 rep) on a weighted main lift IS the 1RM.
     let recordedOneRepMax = false;
     const lift = mainLift(exercise);
-    if (lift && reps === 1 && setType !== "WARMUP") {
+    if (lift && mode === "weight-reps" && reps === 1 && setType !== "WARMUP") {
       const existing = await OneRepMax.findOne({ userId: uid, exercise });
       if (!existing || weight > existing.oneRepMax) {
         await OneRepMax.findOneAndUpdate(
@@ -76,7 +91,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
-        set: { id: String(saved._id), exercise, muscleGroup, weight, reps, setType, e1rm, setNumber },
+        set: { id: String(saved._id), exercise, muscleGroup, mode, weight, reps, durationSec: durationSec ?? null, setType, e1rm, setNumber },
         isPR,
         recordedOneRepMax,
       },
@@ -104,8 +119,10 @@ export async function GET(req: Request) {
       id: String(s._id),
       exercise: s.exercise,
       muscleGroup: s.muscleGroup,
+      mode: s.mode ?? "weight-reps",
       weight: s.weight,
       reps: s.reps,
+      durationSec: s.durationSec ?? null,
       setType: s.setType,
       supersetGroup: s.supersetGroup ?? null,
       e1rm: s.e1rm,

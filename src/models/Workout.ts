@@ -6,17 +6,26 @@ const MUSCLE_SLUGS = MUSCLE_GROUPS.map((g) => g.slug);
 export const SET_TYPES = ["WARMUP", "WORKING", "DROP", "FAILURE"] as const;
 export type SetType = (typeof SET_TYPES)[number];
 
+export const LOGGING_MODES = ["weight-reps", "reps", "time"] as const;
+export type SetMode = (typeof LOGGING_MODES)[number];
+
 /**
  * One logged set, embedded in a day's Workout. `_id` is kept so a single
  * set can be addressed for edit/delete. `e1rm` is the Epley estimate,
  * denormalized at write time so analytics never recompute on read.
+ *
+ * `mode` records how the set was measured: weight × reps, reps only
+ * (bodyweight), or a timed hold. weight/reps carry sensible zero defaults so
+ * a reps-only or timed set never trips a "required" validation.
  */
 const SetSchema = new Schema(
   {
     exercise: { type: String, required: true, trim: true },
     muscleGroup: { type: String, required: true, enum: MUSCLE_SLUGS },
-    weight: { type: Number, required: true, min: 0, max: 2000 }, // kg
-    reps: { type: Number, required: true, min: 1, max: 300 },
+    mode: { type: String, enum: LOGGING_MODES, default: "weight-reps" },
+    weight: { type: Number, default: 0, min: 0, max: 2000 }, // kg
+    reps: { type: Number, default: 0, min: 0, max: 1000 },
+    durationSec: { type: Number, default: null, min: 0, max: 86_400 }, // timed holds
     setType: { type: String, enum: SET_TYPES, default: "WORKING" },
     /** optional superset label ("A", "B", …) grouping sets across exercises */
     supersetGroup: { type: String, default: null },

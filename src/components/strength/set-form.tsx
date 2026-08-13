@@ -10,6 +10,7 @@ import { DecryptedText } from "@/components/reactbits/decrypted-text";
 import { todayIso } from "@/lib/date-utils";
 import { isMainLift } from "@/lib/data/main-lifts";
 import { groupDropSets, nextSetLabel } from "@/lib/set-grouping";
+import { loggingMode, formatHold, describeSet } from "@/lib/exercise-modes";
 import { cn } from "@/lib/utils";
 
 const SUPERSETS = ["A", "B", "C"] as const;
@@ -142,20 +143,25 @@ export function SetForm({
   accent: string;
   date?: string;
 }) {
+  const mode = loggingMode(exercise);
+  const isTime = mode === "time";
+  const isReps = mode === "reps";
+
   const { sets, addSet, removeSet, celebration, clearCelebration } = useSessionStore();
   const [weight, setWeight] = useState(20);
   const [reps, setReps] = useState(8);
+  const [durationSec, setDurationSec] = useState(30);
   const [setType, setSetType] = useState<SetTypeUI>("WORKING");
   const [superset, setSuperset] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   const [ormFlash, setOrmFlash] = useState(false);
-  const [lastHint, setLastHint] = useState<{ weight: number; reps: number } | null>(null);
+  const [lastHint, setLastHint] = useState<{ weight: number; reps: number; durationSec: number | null } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isMain = isMainLift(exercise);
-  const willRecordOneRepMax = isMain && reps === 1 && setType !== "WARMUP";
+  const willRecordOneRepMax = isMain && mode === "weight-reps" && reps === 1 && setType !== "WARMUP";
 
   // smart prefill: last time this exercise was trained
   useEffect(() => {
@@ -164,15 +170,19 @@ export function SetForm({
       .then((r) => r.json())
       .then((j) => {
         if (!live || !j.last) return;
-        setLastHint({ weight: j.last.weight, reps: j.last.reps });
-        setWeight(j.last.weight);
-        setReps(j.last.reps);
+        setLastHint({ weight: j.last.weight, reps: j.last.reps, durationSec: j.last.durationSec ?? null });
+        if (isTime) {
+          if (j.last.durationSec) setDurationSec(j.last.durationSec);
+        } else {
+          if (typeof j.last.weight === "number") setWeight(j.last.weight);
+          if (j.last.reps) setReps(j.last.reps);
+        }
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [exercise]);
+  }, [exercise, isTime]);
 
   useEffect(
     () => () => {
@@ -185,17 +195,28 @@ export function SetForm({
   const setGroups = groupDropSets(forExercise);
   const nextLabel = nextSetLabel(forExercise, setType);
   const projected = roundE1RM(epleyE1RM(weight, Math.max(1, reps)));
-  const canLog = weight >= 0 && reps >= 1 && !saving;
+  const canLog = !saving && (isTime ? durationSec >= 1 : reps >= 1);
 
   const log = async () => {
     if (!canLog) return;
     setSaving(true);
     setError(null);
     try {
+      const payload = {
+        date,
+        exercise,
+        muscleGroup,
+        mode,
+        weight: mode === "weight-reps" ? weight : 0,
+        reps: isTime ? 0 : reps,
+        durationSec: isTime ? durationSec : null,
+        setType,
+        supersetGroup: superset,
+      };
       const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, exercise, muscleGroup, weight, reps, setType, supersetGroup: superset }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -207,9 +228,11 @@ export function SetForm({
         id: json.set.id,
         exercise,
         muscleGroup,
+        mode,
         setNumber: json.set.setNumber,
-        weight,
-        reps,
+        weight: payload.weight,
+        reps: payload.reps,
+        durationSec: payload.durationSec,
         setType,
         supersetGroup: superset,
         e1rm: json.set.e1rm,
@@ -242,9 +265,21 @@ export function SetForm({
 
   const applyLast = () => {
     if (!lastHint) return;
-    setWeight(lastHint.weight);
-    setReps(lastHint.reps);
+    if (isTime) {
+      if (lastHint.durationSec) setDurationSec(lastHint.durationSec);
+    } else {
+      setWeight(lastHint.weight);
+      if (lastHint.reps) setReps(lastHint.reps);
+    }
   };
+
+  const lastHintText = lastHint
+    ? isTime
+      ? `↺ Last: ${formatHold(lastHint.durationSec ?? 0)} hold`
+      : isReps
+        ? `↺ Last: ${lastHint.reps} reps`
+        : `↺ Last: ${lastHint.weight} kg × ${lastHint.reps}`
+    : "";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -257,9 +292,9 @@ export function SetForm({
             className="rounded-xl border border-hot-green/60 bg-hot-green/10 p-3 text-center shadow-neon-green"
           >
             <DecryptedText
-              text={`◆ NEW PR — ${celebration.e1rm} KG e1RM ◆`}
+              text={`◆ NEW PR — ${celebration.label} ◆`}
               className="text-sm font-bold text-neon-green"
-              playKey={celebration.e1rm}
+              playKey={celebration.label}
             />
           </motion.div>
         )}
@@ -287,14 +322,20 @@ export function SetForm({
           onClick={applyLast}
           className="self-start rounded-full border border-edge px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-300"
         >
-          ↺ Last: {lastHint.weight} kg × {lastHint.reps}
+          {lastHintText}
         </button>
       )}
 
-      <div className="flex gap-3">
-        <Stepper label="Weight" value={weight} step={2.5} min={0} unit="kg" onChange={setWeight} onEnter={log} accent={accent} decimals />
-        <Stepper label="Reps" value={reps} step={1} min={1} unit="reps" onChange={setReps} onEnter={log} accent={accent} />
-      </div>
+      {isTime ? (
+        <Stepper label="Hold" value={durationSec} step={5} min={0} unit={`sec · = ${formatHold(durationSec)}`} onChange={setDurationSec} onEnter={log} accent={accent} />
+      ) : isReps ? (
+        <Stepper label="Reps" value={reps} step={1} min={1} unit="reps · bodyweight" onChange={setReps} onEnter={log} accent={accent} />
+      ) : (
+        <div className="flex gap-3">
+          <Stepper label="Weight" value={weight} step={2.5} min={0} unit="kg" onChange={setWeight} onEnter={log} accent={accent} decimals />
+          <Stepper label="Reps" value={reps} step={1} min={1} unit="reps" onChange={setReps} onEnter={log} accent={accent} />
+        </div>
+      )}
 
       <div className="flex gap-2">
         {TAGS.map((t) => (
@@ -337,19 +378,24 @@ export function SetForm({
       <div className="rounded-xl border border-edge bg-void/60 px-4 py-2">
         <div className="flex items-center justify-between">
           <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-            {willRecordOneRepMax ? (
-              <span className="text-neon-purple">Set {nextLabel.number} · records 1RM</span>
-            ) : nextLabel.isDrop ? (
-              <span className="text-neon-purple">Drop of set {nextLabel.number} · Est. 1RM</span>
-            ) : (
-              <>Set {nextLabel.number} · Est. 1RM</>
-            )}
+            {(() => {
+              const prefix = nextLabel.isDrop
+                ? `Drop of set ${nextLabel.number}`
+                : `Set ${nextLabel.number}`;
+              if (isTime) return `${prefix} · hold`;
+              if (isReps) return `${prefix} · bodyweight`;
+              if (willRecordOneRepMax) return <span className="text-neon-purple">{prefix} · records 1RM</span>;
+              return `${prefix} · Est. 1RM`;
+            })()}
           </span>
-          <span className="font-mono text-lg font-bold tabular-nums" style={{ color: willRecordOneRepMax ? "#a78bfa" : accent }}>
-            {willRecordOneRepMax ? weight : projected} kg
+          <span
+            className="font-mono text-lg font-bold tabular-nums"
+            style={{ color: willRecordOneRepMax ? "#a78bfa" : accent }}
+          >
+            {isTime ? formatHold(durationSec) : isReps ? `${reps} reps` : `${willRecordOneRepMax ? weight : projected} kg`}
           </span>
         </div>
-        {isMain && !willRecordOneRepMax && (
+        {isMain && mode === "weight-reps" && !willRecordOneRepMax && (
           <p className="mt-1 font-mono text-[9px] text-zinc-600">
             estimate only — log this main lift at 1 rep to record a true 1RM
           </p>
@@ -398,9 +444,7 @@ export function SetForm({
                 )}
               >
                 <span className="text-zinc-500">{isDrop ? "↳" : `#${number}`}</span>
-                <span className="flex-1 text-zinc-200">
-                  {s.weight} kg × {s.reps}
-                </span>
+                <span className="flex-1 text-zinc-200">{describeSet(s)}</span>
                 {s.supersetGroup && (
                   <span className="rounded bg-hot-blue/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-neon-blue">
                     SS {s.supersetGroup}
@@ -419,7 +463,7 @@ export function SetForm({
                 </span>
                 <span className="tabular-nums text-zinc-400">
                   {s.isPR && <span className="mr-1 text-neon-green">◆</span>}
-                  {s.e1rm} e1RM
+                  {s.mode === "weight-reps" ? `${s.e1rm} e1RM` : ""}
                 </span>
                 <button
                   onClick={() => del(s.id)}

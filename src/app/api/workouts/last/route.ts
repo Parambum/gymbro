@@ -20,13 +20,21 @@ export async function GET(req: Request) {
 
   try {
     await connectDB();
-    const [hit] = await Workout.aggregate<{ weight: number; reps: number; setType: string }>([
+    const [hit] = await Workout.aggregate([
       { $match: { userId: new Types.ObjectId(userId), "sets.exercise": exercise } },
       { $unwind: "$sets" },
       { $match: { "sets.exercise": exercise } },
       { $sort: { date: -1, "sets.createdAt": -1 } },
       { $limit: 1 },
-      { $project: { _id: 0, weight: "$sets.weight", reps: "$sets.reps", setType: "$sets.setType" } },
+      {
+        $project: {
+          _id: 0,
+          weight: "$sets.weight",
+          reps: "$sets.reps",
+          durationSec: "$sets.durationSec",
+          setType: "$sets.setType",
+        },
+      },
     ]);
     return NextResponse.json({ last: hit ?? null });
   } catch {

@@ -42,7 +42,7 @@ export async function GET(req: Request) {
     }>([
       { $match: { userId: uid } },
       { $unwind: "$sets" },
-      { $match: { "sets.muscleGroup": muscle, "sets.setType": { $ne: "WARMUP" } } },
+      { $match: { "sets.muscleGroup": muscle, "sets.setType": { $ne: "WARMUP" }, "sets.e1rm": { $gt: 0 } } },
       { $sort: { "sets.e1rm": -1 } },
       {
         $group: {
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
     const exercises = await Workout.aggregate<{ _id: string; best: number; sets: number }>([
       { $match: { userId: uid } },
       { $unwind: "$sets" },
-      { $match: { "sets.muscleGroup": muscle, "sets.setType": { $ne: "WARMUP" } } },
+      { $match: { "sets.muscleGroup": muscle, "sets.setType": { $ne: "WARMUP" }, "sets.e1rm": { $gt: 0 } } },
       { $group: { _id: "$sets.exercise", best: { $max: "$sets.e1rm" }, sets: { $sum: 1 } } },
       { $sort: { best: -1 } },
     ]);

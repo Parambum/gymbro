@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 import { Calendar } from "@/components/history/calendar";
 import { groupBySlug } from "@/lib/data/exercise-catalog";
 import { groupDropSets } from "@/lib/set-grouping";
+import { describeSet } from "@/lib/exercise-modes";
 import { prettyDate, todayIso } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 
@@ -13,8 +14,10 @@ interface DaySet {
   id: string;
   exercise: string;
   muscleGroup: string;
+  mode?: "weight-reps" | "reps" | "time";
   weight: number;
   reps: number;
+  durationSec?: number | null;
   setType: "WARMUP" | "WORKING" | "DROP" | "FAILURE";
   supersetGroup: string | null;
   e1rm: number;
@@ -165,9 +168,7 @@ export default function HistoryPage() {
                           >
                             <span className="text-zinc-500">{isDrop ? "↳" : `#${number}`}</span>
                             <span className="flex-1 pl-3 text-zinc-300">{s.exercise}</span>
-                            <span className="text-zinc-200">
-                              {s.weight} kg × {s.reps}
-                            </span>
+                            <span className="text-zinc-200">{describeSet(s)}</span>
                             {s.supersetGroup && (
                               <span className="ml-3 rounded bg-hot-blue/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-neon-blue">
                                 SS {s.supersetGroup}
@@ -184,7 +185,9 @@ export default function HistoryPage() {
                             >
                               {s.setType}
                             </span>
-                            <span className="ml-3 w-16 text-right tabular-nums text-zinc-400">{s.e1rm} e1RM</span>
+                            <span className="ml-3 w-16 text-right tabular-nums text-zinc-400">
+                              {(s.mode ?? "weight-reps") === "weight-reps" ? `${s.e1rm} e1RM` : ""}
+                            </span>
                             <button
                               onClick={() => del(s.id)}
                               aria-label={`delete ${s.exercise} ${isDrop ? "drop" : "set"} ${number}`}

@@ -281,7 +281,7 @@ export const MUSCLE_GROUPS: MuscleGroupDef[] = [
       "Hanging Knee Raise",
       "Toes-to-Bar",
       "Ab Wheel Rollout",
-      "Weighted Plank",
+      "Plank",
       "Side Plank",
       "L-Sit Hold",
       "Dragon Flag",
