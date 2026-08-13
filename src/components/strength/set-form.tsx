@@ -11,6 +11,7 @@ import { todayIso } from "@/lib/date-utils";
 import { isMainLift } from "@/lib/data/main-lifts";
 import { groupDropSets, nextSetLabel } from "@/lib/set-grouping";
 import { loggingMode, formatHold, describeSet } from "@/lib/exercise-modes";
+import { ExerciseDemo } from "@/components/strength/exercise-demo";
 import { cn } from "@/lib/utils";
 
 const SUPERSETS = ["A", "B", "C"] as const;
@@ -158,6 +159,7 @@ export function SetForm({
   const [flash, setFlash] = useState(false);
   const [ormFlash, setOrmFlash] = useState(false);
   const [lastHint, setLastHint] = useState<{ weight: number; reps: number; durationSec: number | null } | null>(null);
+  const [prefillDone, setPrefillDone] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isMain = isMainLift(exercise);
@@ -166,19 +168,23 @@ export function SetForm({
   // smart prefill: last time this exercise was trained
   useEffect(() => {
     let live = true;
+    setPrefillDone(false);
     fetch(`/api/workouts/last?exercise=${encodeURIComponent(exercise)}`)
       .then((r) => r.json())
       .then((j) => {
-        if (!live || !j.last) return;
-        setLastHint({ weight: j.last.weight, reps: j.last.reps, durationSec: j.last.durationSec ?? null });
-        if (isTime) {
-          if (j.last.durationSec) setDurationSec(j.last.durationSec);
-        } else {
-          if (typeof j.last.weight === "number") setWeight(j.last.weight);
-          if (j.last.reps) setReps(j.last.reps);
+        if (!live) return;
+        if (j.last) {
+          setLastHint({ weight: j.last.weight, reps: j.last.reps, durationSec: j.last.durationSec ?? null });
+          if (isTime) {
+            if (j.last.durationSec) setDurationSec(j.last.durationSec);
+          } else {
+            if (typeof j.last.weight === "number") setWeight(j.last.weight);
+            if (j.last.reps) setReps(j.last.reps);
+          }
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => live && setPrefillDone(true));
     return () => {
       live = false;
     };
@@ -283,6 +289,8 @@ export function SetForm({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <ExerciseDemo exercise={exercise} accent={accent} />
+
       <AnimatePresence>
         {celebration && celebration.exercise === exercise && (
           <motion.div
@@ -317,14 +325,18 @@ export function SetForm({
         )}
       </AnimatePresence>
 
-      {lastHint && (
+      {lastHint ? (
         <button
           onClick={applyLast}
           className="self-start rounded-full border border-edge px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-300"
         >
           {lastHintText}
         </button>
-      )}
+      ) : prefillDone ? (
+        <span className="self-start rounded-full border border-hot-green/30 bg-hot-green/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-neon-green">
+          ★ First time logging this exercise
+        </span>
+      ) : null}
 
       {isTime ? (
         <Stepper label="Hold" value={durationSec} step={5} min={0} unit={`sec · = ${formatHold(durationSec)}`} onChange={setDurationSec} onEnter={log} accent={accent} />
