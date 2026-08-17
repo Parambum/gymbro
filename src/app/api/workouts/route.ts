@@ -6,7 +6,7 @@ import { OneRepMax } from "@/models/OneRepMax";
 import { currentUserId } from "@/lib/auth-helpers";
 import { LogSetSchema } from "@/lib/validation";
 import { epleyE1RM, roundE1RM } from "@/lib/math/e1rm";
-import { isValidIso, todayIso } from "@/lib/date-utils";
+import { isValidIso, todayIso, addDaysIso } from "@/lib/date-utils";
 import { mainLift } from "@/lib/data/main-lifts";
 
 export const runtime = "nodejs";
@@ -25,6 +25,17 @@ export async function POST(req: Request) {
   }
   const { date, exercise, muscleGroup, mode, weight, reps, durationSec, setType, supersetGroup } =
     parsed.data;
+
+  // You can backfill today or any past day, but never log into the future.
+  // todayIso() here is the *server's* day (UTC on Vercel); the one-day grace
+  // lets a client whose local day is legitimately ahead of UTC — e.g. IST just
+  // after midnight — still log its "today". Genuine future dates are rejected.
+  if (date > addDaysIso(todayIso(), 1)) {
+    return NextResponse.json(
+      { error: "You can only log for today or a past day." },
+      { status: 400 },
+    );
+  }
   // e1RM is only meaningful for external load; bodyweight/timed sets carry 0.
   const e1rm = mode === "weight-reps" ? roundE1RM(epleyE1RM(weight, reps)) : 0;
 

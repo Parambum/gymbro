@@ -45,10 +45,13 @@ export function Calendar({
   selected,
   onSelect,
   marked,
+  maxDate,
 }: {
   selected: string;
   onSelect: (iso: string) => void;
   marked: Set<string>;
+  /** Days after this yyyy-mm-dd are shown disabled (can't log into the future). */
+  maxDate?: string;
 }) {
   const initial = new Date(`${selected}T00:00:00Z`);
   const [view, setView] = useState({ year: initial.getUTCFullYear(), month: initial.getUTCMonth() });
@@ -92,15 +95,23 @@ export function Calendar({
           const isSelected = cell.iso === selected;
           const isToday = today !== null && cell.iso === today;
           const hasLog = marked.has(cell.iso);
+          const isFuture = maxDate != null && cell.iso > maxDate;
           return (
             <button
               key={cell.iso}
               onClick={() => onSelect(cell.iso)}
+              disabled={isFuture}
+              aria-disabled={isFuture}
+              title={isFuture ? "Can't log a future day" : undefined}
               className={cn(
                 "relative aspect-square rounded-lg font-mono text-xs transition-colors",
                 cell.inMonth ? "text-zinc-300" : "text-zinc-700",
-                isSelected ? "bg-hot-purple/25 text-zinc-100 ring-1 ring-hot-purple" : "hover:bg-abyss",
-                isToday && !isSelected && "ring-1 ring-edge",
+                isFuture
+                  ? "cursor-not-allowed text-zinc-700/50"
+                  : isSelected
+                    ? "bg-hot-purple/25 text-zinc-100 ring-1 ring-hot-purple"
+                    : "hover:bg-abyss",
+                isToday && !isSelected && !isFuture && "ring-1 ring-edge",
               )}
             >
               {cell.day}

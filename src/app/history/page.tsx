@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { CalendarPlus, Trash2 } from "lucide-react";
 import { Calendar } from "@/components/history/calendar";
+import { HistoryLogModal } from "@/components/strength/history-log-modal";
 import { groupBySlug } from "@/lib/data/exercise-catalog";
 import { groupDropSets } from "@/lib/set-grouping";
 import { describeSet } from "@/lib/exercise-modes";
@@ -30,6 +30,7 @@ export default function HistoryPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [marked, setMarked] = useState<Set<string>>(new Set());
   const [sets, setSets] = useState<DaySet[] | null>(null);
+  const [logging, setLogging] = useState(false);
 
   const loadDates = useCallback(() => {
     fetch("/api/workouts/dates")
@@ -96,6 +97,14 @@ export default function HistoryPage() {
     );
   }
 
+  // You can backfill today or any earlier day, but not the future.
+  const today = todayIso();
+  const canLog = selected <= today;
+  const refreshDay = () => {
+    loadDay(selected);
+    loadDates();
+  };
+
   return (
     <div className="bg-cyber-grid min-h-[calc(100dvh-3.5rem)] px-4 py-8">
       <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[360px_1fr]">
@@ -103,22 +112,33 @@ export default function HistoryPage() {
           <h1 className="mb-4 font-display text-2xl font-bold uppercase tracking-widest text-zinc-100">
             History<span className="text-neon-green">.</span>
           </h1>
-          <Calendar selected={selected} onSelect={setSelected} marked={marked} />
+          <Calendar selected={selected} onSelect={setSelected} marked={marked} maxDate={today} />
           <p className="mt-3 px-1 font-mono text-[10px] text-zinc-600">
             <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-neon-green align-middle" />
-            days with logged sets
+            days with logged sets · forgot a day? pick it and log below
           </p>
         </section>
 
         <section>
-          <div className="mb-4 flex items-baseline justify-between">
-            <h2 className="font-display text-lg font-bold uppercase tracking-widest text-zinc-200">
-              {prettyDate(selected)}
-            </h2>
-            {summary && (
-              <span className="font-mono text-[11px] text-zinc-500">
-                {summary.sets} sets · {summary.volume} kg
-              </span>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-baseline gap-3">
+              <h2 className="font-display text-lg font-bold uppercase tracking-widest text-zinc-200">
+                {prettyDate(selected)}
+              </h2>
+              {summary && (
+                <span className="font-mono text-[11px] text-zinc-500">
+                  {summary.sets} sets · {summary.volume} kg
+                </span>
+              )}
+            </div>
+            {canLog && (
+              <button
+                onClick={() => setLogging(true)}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-hot-green/50 bg-hot-green/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-neon-green transition-colors hover:bg-hot-green/20"
+              >
+                <CalendarPlus className="h-3.5 w-3.5" />
+                {selected === today ? "Log" : "Log this day"}
+              </button>
             )}
           </div>
 
@@ -131,14 +151,19 @@ export default function HistoryPage() {
               </p>
               <p className="mt-2 max-w-xs font-mono text-xs text-zinc-500">
                 No sets on {prettyDate(selected)}.
-                {selected === todayIso() && " Today's a good day to change that."}
+                {selected === today
+                  ? " Today's a good day to change that."
+                  : " Forgot to log this day? Add it now."}
               </p>
-              <Link
-                href="/train"
-                className="mt-6 rounded-lg border border-hot-green/50 bg-hot-green/10 px-5 py-2 font-mono text-[11px] uppercase tracking-widest text-neon-green hover:bg-hot-green/20"
-              >
-                Log a workout →
-              </Link>
+              {canLog && (
+                <button
+                  onClick={() => setLogging(true)}
+                  className="mt-6 flex items-center gap-2 rounded-lg border border-hot-green/50 bg-hot-green/10 px-5 py-2 font-mono text-[11px] uppercase tracking-widest text-neon-green hover:bg-hot-green/20"
+                >
+                  <CalendarPlus className="h-3.5 w-3.5" />
+                  {selected === today ? "Log a workout" : `Log for ${prettyDate(selected)}`}
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -205,6 +230,13 @@ export default function HistoryPage() {
           )}
         </section>
       </div>
+
+      <HistoryLogModal
+        open={logging}
+        date={selected}
+        onClose={() => setLogging(false)}
+        onChanged={refreshDay}
+      />
     </div>
   );
 }
