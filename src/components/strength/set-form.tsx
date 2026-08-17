@@ -289,7 +289,10 @@ export function SetForm({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <ExerciseDemo exercise={exercise} accent={accent} />
+      {/* Everything scrolls except the pinned action footer below, so the
+          "Log Set" button can never be pushed off-screen on a short viewport. */}
+      <div className="-mr-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+        <ExerciseDemo exercise={exercise} accent={accent} />
 
       <AnimatePresence>
         {celebration && celebration.exercise === exercise && (
@@ -387,54 +390,7 @@ export function SetForm({
         ))}
       </div>
 
-      <div className="rounded-xl border border-edge bg-void/60 px-4 py-2">
-        <div className="flex items-center justify-between">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-            {(() => {
-              const prefix = nextLabel.isDrop
-                ? `Drop of set ${nextLabel.number}`
-                : `Set ${nextLabel.number}`;
-              if (isTime) return `${prefix} · hold`;
-              if (isReps) return `${prefix} · bodyweight`;
-              if (willRecordOneRepMax) return <span className="text-neon-purple">{prefix} · records 1RM</span>;
-              return `${prefix} · Est. 1RM`;
-            })()}
-          </span>
-          <span
-            className="font-mono text-lg font-bold tabular-nums"
-            style={{ color: willRecordOneRepMax ? "#a78bfa" : accent }}
-          >
-            {isTime ? formatHold(durationSec) : isReps ? `${reps} reps` : `${willRecordOneRepMax ? weight : projected} kg`}
-          </span>
-        </div>
-        {isMain && mode === "weight-reps" && !willRecordOneRepMax && (
-          <p className="mt-1 font-mono text-[9px] text-zinc-600">
-            estimate only — log this main lift at 1 rep to record a true 1RM
-          </p>
-        )}
-      </div>
-
-      {error && <p className="font-mono text-[11px] text-neon-crimson">{error}</p>}
-
-      <div className="relative">
-        <MagneticButton onClick={log} disabled={!canLog} className="w-full">
-          {saving ? "Saving…" : "⚡ Log Set"}
-        </MagneticButton>
-        <AnimatePresence>
-          {flash && (
-            <motion.span
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="pointer-events-none absolute -top-6 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-hot-green/50 bg-void px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-neon-green"
-            >
-              <Check className="h-3 w-3" /> Logged
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+      <ul className="space-y-1.5">
         <AnimatePresence initial={false}>
           {[...setGroups]
             .reverse()
@@ -492,7 +448,59 @@ export function SetForm({
             First set of the day. Make it count.
           </li>
         )}
-      </ul>
+        </ul>
+      </div>
+
+      {/* Pinned action footer — the next-set summary + Log button stay put at
+          the bottom of the card so they're always reachable without scrolling. */}
+      <div className="shrink-0 space-y-2 border-t border-edge/60 pt-3">
+        <div className="rounded-xl border border-edge bg-void/60 px-4 py-2">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+              {(() => {
+                const prefix = nextLabel.isDrop
+                  ? `Drop of set ${nextLabel.number}`
+                  : `Set ${nextLabel.number}`;
+                if (isTime) return `${prefix} · hold`;
+                if (isReps) return `${prefix} · bodyweight`;
+                if (willRecordOneRepMax) return <span className="text-neon-purple">{prefix} · records 1RM</span>;
+                return `${prefix} · Est. 1RM`;
+              })()}
+            </span>
+            <span
+              className="font-mono text-lg font-bold tabular-nums"
+              style={{ color: willRecordOneRepMax ? "#a78bfa" : accent }}
+            >
+              {isTime ? formatHold(durationSec) : isReps ? `${reps} reps` : `${willRecordOneRepMax ? weight : projected} kg`}
+            </span>
+          </div>
+          {isMain && mode === "weight-reps" && !willRecordOneRepMax && (
+            <p className="mt-1 font-mono text-[9px] text-zinc-600">
+              estimate only — log this main lift at 1 rep to record a true 1RM
+            </p>
+          )}
+        </div>
+
+        {error && <p className="font-mono text-[11px] text-neon-crimson">{error}</p>}
+
+        <div className="relative">
+          <MagneticButton onClick={log} disabled={!canLog} className="w-full">
+            {saving ? "Saving…" : "⚡ Log Set"}
+          </MagneticButton>
+          <AnimatePresence>
+            {flash && (
+              <motion.span
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="pointer-events-none absolute -top-6 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-hot-green/50 bg-void px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-neon-green"
+              >
+                <Check className="h-3 w-3" /> Logged
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }

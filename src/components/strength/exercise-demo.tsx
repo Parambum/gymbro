@@ -37,7 +37,7 @@ export function ExerciseDemo({ exercise, accent }: { exercise: string; accent: s
 
   return (
     <div className="space-y-2">
-      <div className="relative h-44 overflow-hidden rounded-xl border border-edge bg-white/[0.04]">
+      <div className="relative h-36 overflow-hidden rounded-xl border border-edge bg-white/[0.04] sm:h-44">
         {demo.images.map((img, i) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
