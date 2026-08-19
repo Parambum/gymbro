@@ -118,7 +118,8 @@ src/
 │       ├── exercises               GET base+custom · POST custom exercise
 │       ├── workouts                POST log set (PR check) · GET day
 │       ├── workouts/dates          GET days-with-logs (calendar dots)
-│       └── analytics/{muscle,overview}   aggregation pipelines (e1RM series, radar)
+│       ├── analytics/{muscle,overview}   aggregation pipelines (e1RM series, radar)
+│       └── coach                   POST — AI coach turn (runs the TS agent, or proxies backend/)
 │
 ├── components/
 │   ├── three/                      R3F: anatomy model, 9 muscle zones, 360° rig, bloom
@@ -130,7 +131,9 @@ src/
 │   └── brand/gymbro-logo.tsx       the jacked-figure-with-shaker mark
 │
 ├── store/                          Zustand: anatomy (hover/select/camera) · session (logging)
-└── lib/                            math · db/mongoose · auth-helpers · validation · date-utils
+├── lib/                            math · db/mongoose · auth-helpers · validation · date-utils
+│   └── coach/                      agent (tool runner) · web-scraper · training-log · prompt
+└── components/coach/               chat widget + a 40-line markdown renderer
 ```
 
 ### The click-to-log flow
@@ -176,6 +179,33 @@ imported by `middleware.ts`; the **Node** half ([auth.ts](src/auth.ts)) runs the
 Credentials `authorize` (Mongoose + bcrypt) and the optional Google provider,
 which upserts OAuth users into the same `users` collection so every query keys on
 one identity. The MongoDB `_id` rides the JWT into `session.user.id`.
+
+## AI Coach
+
+A chat widget backed by an agentic tool-calling loop — Claude with two tools:
+
+| Tool | What it does |
+|---|---|
+| `web_scraper` | live web research for named protocols, nutrient-timing studies, uncommon form cues. Routed the way the [agent-reach](https://github.com/Panniantong/agent-reach) skill routes: Exa via `mcporter` when configured, otherwise Jina Reader — which also renders a DuckDuckGo results page, so search works with zero config. Pages are cleaned and capped (6k/page, 12k/call) before they reach the model. |
+| `training_log` | the signed-in lifter's **real** logged training out of Mongo: sessions, working sets, tonnage, muscle coverage, per-lift e1RM trend, recorded 1RMs. The prompt forbids inventing data — an empty log is reported as empty. |
+
+The persona routes itself between four modes — demo, questionnaire, research,
+plan generation — and lives in one file, [system-prompt.md](shared/coach/system-prompt.md),
+read by **both** backends so they cannot drift:
+
+```
+CoachWidget ─► POST /api/coach ─► auth ─► COACH_BACKEND
+                                            ├── "ts"     Anthropic SDK tool runner (in-process)
+                                            └── "python" FastAPI + LangGraph service (backend/)
+```
+
+Both speak the same request/response shape, so the widget cannot tell them
+apart; the user id is always resolved server-side from the session, never taken
+from the browser. The Python service is documented in [backend/README.md](backend/README.md)
+and answers only with a shared `x-coach-token`.
+
+Set `ANTHROPIC_API_KEY` in `.env` to enable the widget. Without it the route
+returns 503 and the rest of the app is unaffected.
 
 ## Scripts
 

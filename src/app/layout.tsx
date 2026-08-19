@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { auth } from "@/auth";
 import { Nav } from "@/components/nav";
+import { CoachWidget } from "@/components/coach/coach-widget";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <main className={signedIn ? "pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}>
           {children}
         </main>
+        <CoachWidget signedIn={signedIn} />
       </body>
     </html>
   );
