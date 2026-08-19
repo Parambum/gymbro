@@ -17,7 +17,7 @@ from fastapi import FastAPI, Header, HTTPException
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, Field
 
-from coach.graph import MODEL, build_coach_graph
+from coach.graph import GROQ_MODEL, MODEL, build_coach_graph
 from coach.prompt import REPO_ROOT, coach_system_prompt
 
 # the app's single .env at the repo root — one place for MONGODB_URI and keys
@@ -76,11 +76,16 @@ def _text_of(content) -> str:
 @app.get("/health")
 def health() -> dict:
     """Cheap readiness probe — also proves the shared prompt is reachable."""
+    provider = os.getenv("COACH_PROVIDER", "").strip().lower()
+    if not provider:
+        provider = "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "groq"
     return {
         "status": "ok",
-        "model": MODEL,
+        "provider": provider,
+        "model": MODEL if provider == "anthropic" else os.getenv("GROQ_MODEL", GROQ_MODEL),
         "prompt_chars": len(coach_system_prompt()),
         "anthropic_key": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "groq_key": bool(os.getenv("GROQ_API_KEY")),
         "mongo_uri": bool(os.getenv("MONGODB_URI")),
     }
 
@@ -89,8 +94,10 @@ def health() -> dict:
 def chat(req: ChatRequest, x_coach_token: str | None = Header(default=None)) -> ChatResponse:
     _require_token(x_coach_token)
 
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not set.")
+    if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("GROQ_API_KEY")):
+        raise HTTPException(
+            status_code=503, detail="No model key is set (ANTHROPIC_API_KEY or GROQ_API_KEY)."
+        )
 
     history = [
         HumanMessage(content=t.content) if t.role == "user" else AIMessage(content=t.content)

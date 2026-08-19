@@ -4,6 +4,9 @@ uvicorn[standard]==0.34.0
 langgraph==0.2.60
 langchain-core==0.3.29
 langchain-anthropic==0.3.1
+# 0.3.x keeps langchain-core on the 0.3 line that langgraph 0.2.60 needs;
+# langchain-groq 1.x pulls core 1.x and breaks both.
+langchain-groq==0.2.3
 pymongo==4.10.1
 httpx==0.28.1
 python-dotenv==1.0.1

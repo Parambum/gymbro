@@ -25,7 +25,8 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
 # source .venv/bin/activate && pip install -r requirements.txt  # macOS/Linux
 
-# reads the repo-root .env: ANTHROPIC_API_KEY, MONGODB_URI, COACH_SERVICE_TOKEN
+# reads the repo-root .env: GROQ_API_KEY or ANTHROPIC_API_KEY,
+#                           MONGODB_URI, COACH_SERVICE_TOKEN
 .venv/Scripts/python.exe -m uvicorn main:app --reload --port 8000
 ```
 
@@ -62,6 +63,19 @@ every request (503) rather than running unauthenticated.
 | `coach/scraper.py` | agent-reach routing: Exa via mcporter, else Jina Reader |
 | `coach/training_log.py` | pymongo read of the user's real sessions, sets and e1RM trend |
 | `coach/prompt.py` | loads `shared/coach/system-prompt.md` |
+
+## Switching provider
+
+`build_llm()` in `coach/graph.py` follows `COACH_PROVIDER` (`groq` | `anthropic`),
+or whichever key exists. Swapping costs three lines because the `StateGraph`,
+the `ToolNode` and both tools never mention a provider:
+
+```python
+return ChatGroq(model="openai/gpt-oss-120b", max_tokens=MAX_TOKENS)
+```
+
+Note the pin: `langchain-groq==0.2.3`. The 1.x line pulls `langchain-core` 1.x,
+which breaks both `langgraph` 0.2.60 and `langchain-anthropic` 0.3.1.
 
 ## Notes
 

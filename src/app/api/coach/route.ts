@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { currentUserId } from "@/lib/auth-helpers";
-import { runCoach, type CoachTurn } from "@/lib/coach/agent";
+import { runCoach } from "@/lib/coach/agent";
+import { runGroqCoach } from "@/lib/coach/groq-agent";
+import type { CoachTurn } from "@/lib/coach/types";
 
 /**
  * The chat widget's only endpoint — and the switch between the project's two
  * coach backends:
  *
- *   COACH_BACKEND=ts      (default) run the Anthropic tool-runner loop here
+ *   COACH_BACKEND=ts      (default) run the agentic loop in this process
  *   COACH_BACKEND=python  proxy to the FastAPI + LangGraph service in backend/
+ *
+ * In `ts` mode COACH_PROVIDER picks the engine — "anthropic" or "groq". Unset,
+ * it follows whichever key exists, so deployments only have to set a key.
  *
  * Both speak the same request/response shape and load the same system prompt,
  * so the widget cannot tell them apart — flipping one env var swaps the engine.
@@ -38,12 +43,16 @@ const BodySchema = z.object({
 
 export async function POST(req: Request) {
   const backend = process.env.COACH_BACKEND ?? "ts";
+  const provider = resolveProvider();
 
-  // Only the process that actually calls Anthropic needs the key: in python
-  // mode that is the LangGraph service, which checks for itself.
-  if (backend !== "python" && !process.env.ANTHROPIC_API_KEY) {
+  // Only the process that actually calls a model needs a key: in python mode
+  // that is the LangGraph service, which checks for itself.
+  if (backend !== "python" && provider === null) {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY is not set. Add it to .env to enable the AI coach." },
+      {
+        error:
+          "No model key is set. Add GROQ_API_KEY (or ANTHROPIC_API_KEY) to enable the AI coach.",
+      },
       { status: 503 },
     );
   }
@@ -64,13 +73,30 @@ export async function POST(req: Request) {
     const result =
       backend === "python"
         ? await callPythonBackend(messages, userId)
-        : await runCoach(messages, userId);
+        : provider === "groq"
+          ? await runGroqCoach(messages, userId)
+          : await runCoach(messages, userId);
     return NextResponse.json(result);
   } catch (err) {
     console.error("[coach] request failed:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: `Coach unavailable: ${message}` }, { status: 502 });
   }
+}
+
+/**
+ * Which engine answers. An explicit COACH_PROVIDER wins; otherwise follow the
+ * key that exists, so a deployment enables the coach by setting one variable
+ * and nothing else. Returns null when neither key is configured.
+ */
+function resolveProvider(): "anthropic" | "groq" | null {
+  const explicit = process.env.COACH_PROVIDER?.toLowerCase();
+  if (explicit === "groq") return process.env.GROQ_API_KEY ? "groq" : null;
+  if (explicit === "anthropic") return process.env.ANTHROPIC_API_KEY ? "anthropic" : null;
+
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  if (process.env.GROQ_API_KEY) return "groq";
+  return null;
 }
 
 async function callPythonBackend(messages: CoachTurn[], userId: string | null) {

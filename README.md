@@ -195,17 +195,31 @@ read by **both** backends so they cannot drift:
 
 ```
 CoachWidget ─► POST /api/coach ─► auth ─► COACH_BACKEND
-                                            ├── "ts"     Anthropic SDK tool runner (in-process)
+                                            ├── "ts"     in-process agent loop
+                                            │              ├── COACH_PROVIDER=groq       OpenAI-dialect tool loop
+                                            │              └── COACH_PROVIDER=anthropic  SDK tool runner
                                             └── "python" FastAPI + LangGraph service (backend/)
 ```
+
+Two providers, one tool surface: [tools.ts](src/lib/coach/tools.ts) holds the
+name, description and JSON Schema of each tool, and both adapters build their
+own wire format from it — Anthropic wants `input_schema`, Groq wants
+`function.parameters`, and declaring that twice is how engines start behaving
+differently. Groq has no equivalent of the Anthropic SDK's tool runner, so
+[groq-agent.ts](src/lib/coach/groq-agent.ts) writes the loop out by hand.
+
+Set **one** key — `GROQ_API_KEY` or `ANTHROPIC_API_KEY` — and the route picks
+the matching engine on its own; `COACH_PROVIDER` overrides. The LangGraph
+service takes the same switch, where changing provider is three lines because
+the graph and tools are provider-agnostic.
 
 Both speak the same request/response shape, so the widget cannot tell them
 apart; the user id is always resolved server-side from the session, never taken
 from the browser. The Python service is documented in [backend/README.md](backend/README.md)
 and answers only with a shared `x-coach-token`.
 
-Set `ANTHROPIC_API_KEY` in `.env` to enable the widget. Without it the route
-returns 503 and the rest of the app is unaffected.
+Without any model key the route returns 503 and the rest of the app is
+unaffected — the widget just reports that it needs one.
 
 ## Scripts
 

@@ -10,6 +10,8 @@ src/lib/coach/agent.ts.
 
 from __future__ import annotations
 
+import os
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage
 from langgraph.graph import START, MessagesState, StateGraph
@@ -19,8 +21,29 @@ from coach.prompt import coach_system_prompt
 from coach.tools import make_training_log_tool, web_scraper
 
 MODEL = "claude-opus-5"
+GROQ_MODEL = "openai/gpt-oss-120b"
 # The persona is deliberately terse — a widget-sized reply, not an essay.
 MAX_TOKENS = 4096
+
+
+def build_llm():
+    """Pick the chat model.
+
+    An explicit COACH_PROVIDER wins; otherwise follow whichever key exists, so
+    a deployment enables the coach by setting one variable and nothing else.
+    Swapping providers costs three lines here precisely because the graph, the
+    tools and the prompt below are all provider-agnostic.
+    """
+    provider = os.getenv("COACH_PROVIDER", "").strip().lower()
+    if not provider:
+        provider = "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "groq"
+
+    if provider == "groq":
+        from langchain_groq import ChatGroq
+
+        return ChatGroq(model=os.getenv("GROQ_MODEL", GROQ_MODEL), max_tokens=MAX_TOKENS)
+
+    return ChatAnthropic(model=MODEL, max_tokens=MAX_TOKENS)
 
 
 def build_coach_graph(user_id: str | None):
@@ -35,7 +58,7 @@ def build_coach_graph(user_id: str | None):
     if user_id:
         tools.append(make_training_log_tool(user_id))
 
-    llm = ChatAnthropic(model=MODEL, max_tokens=MAX_TOKENS).bind_tools(tools)
+    llm = build_llm().bind_tools(tools)
     system = SystemMessage(content=coach_system_prompt())
 
     def agent(state: MessagesState) -> dict:
