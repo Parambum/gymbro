@@ -25,7 +25,9 @@ export interface ScrapeResult {
   text: string;
 }
 
-const FETCH_TIMEOUT_MS = 20_000;
+// A research turn can spend three fetches (SERP + two pages) inside a 60s
+// function budget, and still needs room for the model's turns.
+const FETCH_TIMEOUT_MS = 12_000;
 /** Scraped pages are huge; the model only needs the substance. */
 const PER_PAGE_CHARS = 6_000;
 const TOTAL_CHARS = 12_000;

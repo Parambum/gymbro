@@ -19,7 +19,8 @@ import { runCoach, type CoachTurn } from "@/lib/coach/agent";
  */
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// Vercel's Hobby plan caps a function at 60s; asking for more fails the deploy.
+export const maxDuration = 60;
 
 const BodySchema = z.object({
   messages: z
@@ -83,7 +84,7 @@ async function callPythonBackend(messages: CoachTurn[], userId: string | null) {
     method: "POST",
     headers: { "content-type": "application/json", "x-coach-token": token },
     body: JSON.stringify({ messages, user_id: userId }),
-    signal: AbortSignal.timeout(110_000),
+    signal: AbortSignal.timeout(55_000),
   });
 
   if (!res.ok) {
