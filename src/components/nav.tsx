@@ -7,6 +7,7 @@ import {
   BarChart3,
   CalendarDays,
   Dumbbell,
+  Flame,
   Footprints,
   LayoutDashboard,
   LogOut,
@@ -18,6 +19,7 @@ const LINKS = [
   { href: "/dashboard", label: "Dashboard", short: "Deck", icon: LayoutDashboard },
   { href: "/train", label: "Train", short: "Train", icon: Dumbbell },
   { href: "/cardio", label: "Cardio", short: "Cardio", icon: Footprints },
+  { href: "/fuel", label: "Fuel", short: "Fuel", icon: Flame, flag: "fuel" as const },
   { href: "/analytics", label: "Analytics", short: "Stats", icon: BarChart3 },
   { href: "/history", label: "History", short: "History", icon: CalendarDays },
 ];
@@ -32,12 +34,19 @@ type NavUser = { name?: string | null; email?: string | null; image?: string | n
  * desktop inline link row is hidden there — five uppercase, wide-tracked
  * labels measured 466px, which is what was forcing every page to scroll
  * sideways on a phone.
+ *
+ * `fuelEnabled` comes from the FUEL_ENABLED env var, read server-side in
+ * layout.tsx and passed down: a flagged-off Fuel module must leave no tab
+ * behind, and this component cannot read a non-public env var itself.
  */
-export function Nav({ user }: { user: NavUser }) {
+export function Nav({ user, fuelEnabled = false }: { user: NavUser; fuelEnabled?: boolean }) {
   const pathname = usePathname();
 
   // auth screens are full-bleed; no chrome
   if (pathname === "/login" || pathname === "/signup") return null;
+
+  // A flagged-off module leaves no trace in the nav — no dead tab, no 404.
+  const links = LINKS.filter((l) => l.flag !== "fuel" || fuelEnabled);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -57,7 +66,7 @@ export function Nav({ user }: { user: NavUser }) {
             <div className="flex min-w-0 items-center gap-1">
               {/* desktop-only inline links */}
               <div className="hidden items-center gap-1 md:flex">
-                {LINKS.map((link) => {
+                {links.map((link) => {
                   const active = isActive(link.href);
                   return (
                     <Link
@@ -116,7 +125,7 @@ export function Nav({ user }: { user: NavUser }) {
           className="pb-safe fixed inset-x-0 bottom-0 z-50 border-t border-edge/70 bg-void/95 backdrop-blur-md md:hidden"
         >
           <div className="flex items-stretch justify-around">
-            {LINKS.map((link) => {
+            {links.map((link) => {
               const active = isActive(link.href);
               const Icon = link.icon;
               return (

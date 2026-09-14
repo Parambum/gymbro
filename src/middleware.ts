@@ -17,6 +17,7 @@ export const config = {
     "/cardio/:path*",
     "/analytics/:path*",
     "/history/:path*",
+    "/fuel/:path*",
     "/login",
     "/signup",
   ],

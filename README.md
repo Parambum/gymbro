@@ -221,6 +221,80 @@ and answers only with a shared `x-coach-token`.
 Without any model key the route returns 503 and the rest of the app is
 unaffected — the widget just reports that it needs one.
 
+## GymBro Fuel (nutrition module)
+
+Calorie and macro tracking, built alongside the strength tracker rather than
+on top of it: new `fuel*` collections only, no change to any workout table,
+route or component beyond one nav entry.
+
+**It ships dark.** Until `FUEL_ENABLED="true"` the tab is hidden, `/fuel`
+returns 404 and every `/api/fuel/*` route refuses. Turning it off again needs
+no redeploy of anything else.
+
+### Setting it up
+
+```bash
+# 1. free USDA key, issued instantly, no approval:
+#    https://fdc.nal.usda.gov/api-key-signup.html
+#    → put it in .env as USDA_FDC_API_KEY
+npm run fuel:fetch      # build src/lib/data/fuel-foods.json from USDA
+npm run fuel:seed       # create the indexes + upsert the food database
+# 2. set FUEL_ENABLED="true" in .env
+npm run dev             # the Fuel tab appears
+```
+
+`fuel:fetch` is the only thing that ever talks to USDA — the running app
+never does, so production does not need the key. Without one it falls back to
+`DEMO_KEY`, which api.data.gov caps at 10 requests/hour.
+
+### No invented nutrition data
+
+Every per-100g figure in the food database is fetched from USDA FoodData
+Central and stored with the `fdcId` it came from, so any number in the app can
+be traced to its source. A food the fetcher cannot match is reported as a miss
+and **does not ship** — there is no hand-typed composition anywhere. Run
+`npm run fuel:audit` to see exactly which upstream record each food resolved
+to before writing anything.
+
+Household portions (katori, roti, scoop, glass) *are* project-curated, in
+`scripts/fuel/portion-sets.mjs`. Those describe how big a serving is, not
+what's in it.
+
+### Screens
+
+| Route | What it is |
+|---|---|
+| `/fuel` | Today — calorie ring, macro bars, water, four meal cards, day navigator |
+| `/fuel/progress` | Weight trend, calorie adherence (7/30/90 day), macro averages, streak |
+| `/fuel/profile` | Targets, your numbers, settings, disclaimer |
+| `/fuel/onboarding` | Five-step setup that produces the first target |
+
+Logging is a bottom sheet: search (debounced, typo- and transliteration-tolerant)
+→ portion picker in Indian household units with a live macro preview → Add.
+An empty query shows what you actually eat, so a repeat meal is three taps.
+Quick-add is there for when looking something up isn't worth it.
+
+**Search never trusts the client.** The request says *what* was eaten and *how
+much*; the server resolves grams from the stored portion and recomputes every
+macro from the food's own composition. Those macros are then frozen into the
+log row along with the food's name, so correcting a food later never rewrites
+history. Repeat saves carry a `clientId` and are idempotent — a double tap on a
+slow connection logs one meal.
+
+### The calorie engine
+
+`src/lib/fuel/engine.ts` — Mifflin-St Jeor → TDEE → goal adjustment → macro
+split, pure functions with no I/O, covered by `npm test`. Safety rules are
+hard clamps, not warnings: loss capped at 0.75 %/week and gain at 0.35 % of
+bodyweight, never a target below 1500 kcal (male) / 1200 kcal (female), and
+never below the user's own BMR. Each clamp returns one plain sentence that the
+UI prints verbatim. A manual target override is re-floored server-side, so the
+limits cannot be posted around.
+
+Targets are **append-only**: recalculating inserts a row with a new
+`effectiveFrom` instead of overwriting, so a day in the past is always read
+against the target that was actually in force then.
+
 ## Scripts
 
 | Command | Effect |
@@ -228,6 +302,10 @@ unaffected — the widget just reports that it needs one.
 | `npm run dev` | dev server |
 | `npm run build` / `start` | production |
 | `npm run typecheck` | strict TS, no emit |
+| `npm test` | unit tests (Vitest) — calorie engine, macros, portions, weight trend |
+| `npm run fuel:fetch` | build the food database from USDA FoodData Central |
+| `npm run fuel:audit` | show which USDA record each seed food matches, write nothing |
+| `npm run fuel:seed` | create Fuel indexes and upsert the food database |
 
 ## Verified
 
@@ -235,3 +313,11 @@ Built and driven end-to-end against a real MongoDB: signup → login → blank
 dashboard → 3D click-to-log (incl. a custom exercise) → populated dashboard,
 per-muscle analytics, body radar, and calendar history — all real writes, no
 seeded data. e1RM math checks out (60 kg × 10 → 80.0, 100 kg × 9 → 130.0).
+
+**Fuel:** 98 unit tests (`npm test`) over the calorie engine, macro split,
+portion resolution, weight smoothing, search ranking and streaks. Driven end to
+end against a running server and a real MongoDB: register → onboard → search
+→ log → day totals → water → weigh-in → progress → delete, including the cases
+that matter — an aggressive rate capped and explained, a manual target raised
+back to BMR, client-sent macros ignored in favour of the food's own data, a
+repeated save landing once, and a signed-out request bounced.
