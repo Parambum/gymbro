@@ -39,6 +39,26 @@ export const CARDIO_SERIES = {
   elevation: "#d97706", // amber
 } as const;
 
+/**
+ * Fuel (nutrition) analytics.
+ *
+ * No new hues: every value here is one of the already-validated marks above,
+ * reused on a chart of its own. The weight chart pairs its series with the
+ * neutral TREND ink rather than a second hue, exactly as the e1RM chart does,
+ * so no unvalidated pair is ever drawn together.
+ *
+ * `overTarget` is the one two-mark chart — calorie adherence bars, where a day
+ * above target is amber. Both hues are validated against the surface and sit
+ * far apart in lightness (L 0.59 vs 0.67). Amber here is a neutral fact, never
+ * a warning: §5.6 forbids a punishment state, so the same information is
+ * always given in words beside the chart.
+ */
+export const FUEL_SERIES = {
+  weight: CARDIO_SERIES.distance,
+  calories: STRENGTH_SERIES.volume,
+  overTarget: CARDIO_SERIES.elevation,
+} as const;
+
 /** Trendline overlays — neutral ink, never a third hue. */
 export const TREND = "#9ca3af";
 
