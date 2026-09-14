@@ -242,20 +242,27 @@ export function ProfileScreen() {
       </SectionCard>
 
       {/* ── settings ──────────────────────────────────────────────── */}
-      {/*
-        Only settings that actually do something appear here. The profile also
-        carries `exerciseCaloriesEnabled` and `calorieCyclingEnabled`, but
-        nothing reads them yet — those are the §8 training-bridge behaviours,
-        and a switch that stores a preference and changes nothing is a dead
-        button. They get their toggles when they get their logic.
-      */}
       <SectionCard title="Settings">
-        <Toggle
-          label="Eyes-off mode"
-          hint="Hides calories and weight everywhere. Protein and habit tracking carry on."
-          checked={p.eyesOffMode}
-          onChange={(v) => patch({ eyesOffMode: v })}
-        />
+        <div className="space-y-2">
+          <Toggle
+            label="Eyes-off mode"
+            hint="Hides calories and weight everywhere. Protein and habit tracking carry on."
+            checked={p.eyesOffMode}
+            onChange={(v) => patch({ eyesOffMode: v })}
+          />
+          <Toggle
+            label="Calorie cycling"
+            hint="More carbs on the days you train, funded by your rest days. Same total across the week."
+            checked={p.calorieCyclingEnabled}
+            onChange={(v) => patch({ calorieCyclingEnabled: v })}
+          />
+          <Toggle
+            label="Add cardio calories back"
+            hint="Off for a reason: your activity level already accounts for training, and counting it twice is the commonest way to stall. The estimate is rough — distance and bodyweight only."
+            checked={p.exerciseCaloriesEnabled}
+            onChange={(v) => patch({ exerciseCaloriesEnabled: v })}
+          />
+        </div>
       </SectionCard>
 
       <p className="flex gap-2 px-1 font-mono text-[10px] leading-relaxed text-zinc-600">

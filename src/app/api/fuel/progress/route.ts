@@ -5,12 +5,14 @@ import { FuelLog } from "@/models/FuelLog";
 import { FuelWeight } from "@/models/FuelWeight";
 import { FuelTarget } from "@/models/FuelTarget";
 import { FuelProfile } from "@/models/FuelProfile";
+import { Workout } from "@/models/Workout";
 import { fuelGuard } from "@/lib/fuel/server";
 import { targetForDate } from "@/lib/fuel/targets";
 import { trendDirection, weeklyChangeKg, withWeightTrend } from "@/lib/fuel/trend";
 import { loggingStreak } from "@/lib/fuel/log";
+import { proteinVerdict } from "@/lib/fuel/bridge";
 import { round } from "@/lib/fuel/types";
-import { addDaysIso, isValidIso, todayIso } from "@/lib/date-utils";
+import { addDaysIso, isValidIso, todayIso, weekStartIso } from "@/lib/date-utils";
 
 export const runtime = "nodejs";
 
@@ -115,6 +117,53 @@ export async function GET(req: Request) {
     const trend = withWeightTrend(weights.map((w) => ({ date: w.localDate, weightKg: w.weightKg })));
     const weekly = weeklyChangeKg(trend);
 
+    // ── §8.3 protein vs progress ─────────────────────────────────────
+    // Group intake and tonnage into the same Monday-anchored weeks so the two
+    // series are actually comparable before anything is claimed about them.
+    const workouts = await Workout.find({
+      userId: uid,
+      date: { $gte: since, $lte: today },
+    })
+      .select({ date: 1, sets: 1 })
+      .lean();
+
+    const weekBuckets = new Map<
+      string,
+      { proteinSum: number; kcalSum: number; days: number; tonnageKg: number }
+    >();
+    const bucket = (iso: string) => {
+      const key = weekStartIso(iso);
+      const b = weekBuckets.get(key) ?? { proteinSum: 0, kcalSum: 0, days: 0, tonnageKg: 0 };
+      weekBuckets.set(key, b);
+      return b;
+    };
+
+    for (const d of loggedDays) {
+      const b = bucket(d.date);
+      b.proteinSum += d.proteinG ?? 0;
+      b.kcalSum += d.kcal ?? 0;
+      b.days += 1;
+    }
+    for (const w of workouts) {
+      const b = bucket(w.date);
+      b.tonnageKg += (w.sets ?? [])
+        .filter((s) => s.setType !== "WARMUP")
+        .reduce((sum, s) => sum + (s.weight ?? 0) * (s.reps ?? 0), 0);
+    }
+
+    const weeks = [...weekBuckets.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([weekStart, b]) => ({
+        weekStart,
+        avgProteinG: b.days > 0 ? round(b.proteinSum / b.days, 1) : null,
+        avgKcal: b.days > 0 ? Math.round(b.kcalSum / b.days) : null,
+        tonnageKg: Math.round(b.tonnageKg),
+        daysLogged: b.days,
+      }));
+
+    const latestWeightKg = trend.at(-1)?.trendKg ?? null;
+    const verdict = proteinVerdict(weeks, latestWeightKg);
+
     return NextResponse.json({
       days,
       since,
@@ -129,6 +178,9 @@ export async function GET(req: Request) {
         direction: trendDirection(weekly),
       },
       adherence,
+      weeks,
+      /** §8.3 — null message means the data didn't support saying anything. */
+      proteinVsProgress: verdict,
       summary: {
         loggedDays: loggedDays.length,
         windowDays: days,

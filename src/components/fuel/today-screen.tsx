@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Flame, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Dumbbell, Flame, Trash2 } from "lucide-react";
 import { AddButton, LogSheet } from "./log-sheet";
 import { CalorieRing, MacroBars, WaterRow } from "./today-widgets";
 import { GLASS_ML, MEAL_LABELS, type MacroTotals, type Meal } from "@/lib/fuel/types";
@@ -35,6 +35,9 @@ interface Day {
   meals: Array<{ meal: Meal; totals: MacroTotals; entries: Entry[] }>;
   water: { ml: number; targetMl: number | null };
   trainedOnDate: boolean;
+  workout: { setCount: number; muscles: string[]; tonnageKg: number } | null;
+  cardio: Array<{ name: string; type: string; distanceKm: number }>;
+  bridgeNotes: string[];
   streak: number;
 }
 
@@ -190,7 +193,56 @@ export function TodayScreen() {
             </Link>
           </p>
         )}
+
+        {/* §8 — why today's target isn't the usual number */}
+        {day.bridgeNotes.length > 0 && (
+          <ul className="mt-4 space-y-2">
+            {day.bridgeNotes.map((n) => (
+              <li
+                key={n}
+                className="rounded-xl border border-hot-blue/30 bg-hot-blue/5 px-3 py-2 font-mono text-[10px] leading-relaxed text-zinc-300"
+              >
+                {n}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
+
+      {/* ── §8.5: the same date, both halves ──────────────────────── */}
+      {(day.workout || day.cardio.length > 0) && (
+        <section className="rounded-2xl border border-edge bg-panel/40 p-4">
+          <div className="flex items-center gap-2">
+            <Dumbbell className="h-3.5 w-3.5 text-neon-purple" />
+            <h2 className="font-display text-sm font-bold uppercase tracking-widest text-zinc-100">
+              Trained {isToday ? "today" : "this day"}
+            </h2>
+          </div>
+
+          {day.workout && (
+            <p className="mt-2 font-mono text-[11px] text-zinc-400">
+              <span className="text-zinc-200">{day.workout.muscles.join(" · ") || "Session"}</span>
+              {" — "}
+              {day.workout.setCount} sets
+              {day.workout.tonnageKg > 0 &&
+                ` · ${day.workout.tonnageKg.toLocaleString()} kg volume`}
+            </p>
+          )}
+
+          {day.cardio.map((c) => (
+            <p key={`${c.name}-${c.distanceKm}`} className="mt-1 font-mono text-[11px] text-zinc-400">
+              <span className="text-zinc-200">{c.name}</span> — {c.distanceKm} km
+            </p>
+          ))}
+
+          <Link
+            href="/history"
+            className="mt-3 inline-flex min-h-[36px] items-center font-mono text-[10px] uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-200"
+          >
+            See the session →
+          </Link>
+        </section>
+      )}
 
       {/* ── water ─────────────────────────────────────────────────── */}
       <WaterRow

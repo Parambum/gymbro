@@ -21,6 +21,11 @@ interface Progress {
     direction: "rising" | "falling" | "flat";
   };
   adherence: AdherencePoint[];
+  proteinVsProgress: {
+    latestProteinPerKg: number | null;
+    tonnageChangePct: number | null;
+    message: string | null;
+  };
   summary: {
     loggedDays: number;
     windowDays: number;
@@ -224,6 +229,36 @@ export function ProgressScreen() {
           </>
         )}
       </SectionCard>
+
+      {/* ── §8.3 protein vs what you actually lifted ──────────────── */}
+      {data.proteinVsProgress.message && (
+        <SectionCard
+          title="Protein & progress"
+          hint="The bit a calorie app on its own can't tell you."
+        >
+          <p className="font-mono text-[11px] leading-relaxed text-zinc-300">
+            {data.proteinVsProgress.message}
+          </p>
+          {data.proteinVsProgress.tonnageChangePct != null && (
+            <dl className="mt-3 grid grid-cols-2 gap-2">
+              <Stat
+                label="Protein"
+                value={
+                  data.proteinVsProgress.latestProteinPerKg != null
+                    ? `${data.proteinVsProgress.latestProteinPerKg} g/kg`
+                    : "—"
+                }
+              />
+              <Stat
+                label="Volume vs last week"
+                value={`${data.proteinVsProgress.tonnageChangePct > 0 ? "+" : ""}${
+                  data.proteinVsProgress.tonnageChangePct
+                }%`}
+              />
+            </dl>
+          )}
+        </SectionCard>
+      )}
 
       {/* ── averages ──────────────────────────────────────────────── */}
       <SectionCard title="Daily average" hint="Across the days you logged, not the whole window.">
