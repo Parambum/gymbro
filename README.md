@@ -264,15 +264,27 @@ what's in it.
 
 | Route | What it is |
 |---|---|
-| `/fuel` | Today — calorie ring, macro bars, water, four meal cards, day navigator |
-| `/fuel/progress` | Weight trend, calorie adherence (7/30/90 day), macro averages, streak |
+| `/fuel` | Today — calorie ring, macro bars, water, four meal cards, day navigator, the day's training |
+| `/fuel/progress` | Weight trend, calorie adherence (7/30/90 day), macro averages, protein-vs-volume, streak |
+| `/fuel/foods` | Custom foods and the recipe builder |
 | `/fuel/profile` | Targets, your numbers, settings, disclaimer |
 | `/fuel/onboarding` | Five-step setup that produces the first target |
 
-Logging is a bottom sheet: search (debounced, typo- and transliteration-tolerant)
-→ portion picker in Indian household units with a live macro preview → Add.
-An empty query shows what you actually eat, so a repeat meal is three taps.
-Quick-add is there for when looking something up isn't worth it.
+### Five ways to log
+
+Everything funnels into the same portion sheet, so the amount is confirmed in
+exactly one place:
+
+| Path | What it does |
+|---|---|
+| **Search** | Debounced, typo- and transliteration-tolerant. `dhal`/`daal`/`dal` all hit; `panner` finds paneer. An empty query lists what you actually eat, so a repeat meal is three taps. |
+| **Barcode** | Native `BarcodeDetector` where the browser has it (Chrome/Android), number pad everywhere else. Open Food Facts, cached — including misses. |
+| **Snap a meal** | Photo → Claude vision → an editable draft. Never auto-saved. |
+| **Describe it** | "2 roti, 1 katori dal aur ek glass doodh" → the same draft. Handles Hinglish. |
+| **Quick add** | Raw numbers, no food behind them, for when looking it up isn't worth it. |
+
+Plus **custom foods** (created inline when search comes up empty) and
+**recipes** (ingredients ÷ servings, saved as a food you can search for).
 
 **Search never trusts the client.** The request says *what* was eaten and *how
 much*; the server resolves grams from the stored portion and recomputes every
@@ -294,6 +306,48 @@ limits cannot be posted around.
 Targets are **append-only**: recalculating inserts a row with a new
 `effectiveFrom` instead of overwriting, so a day in the past is always read
 against the target that was actually in force then.
+
+### The AI paths
+
+Photo and natural-language logging go through `ANTHROPIC_API_KEY` (§7 specifies
+the Anthropic API; the chat coach's Groq option doesn't apply here). Without the
+key those two routes return 503 and say so — search, barcode, custom foods and
+quick-add all keep working, which is the point of never making AI the only way in.
+
+- **Nothing is ever auto-saved.** Both routes return a draft; the user edits it
+  and commits through `/api/fuel/log` like any other entry.
+- **Photos are never persisted.** The image is compressed client-side, sent to
+  the model in memory, and dropped when the request ends. `FuelLog.photoUrl`
+  exists for a future blob store and is always null today — which makes "delete
+  the photo with the entry" trivially true.
+- Items are matched against the food database through the same ranker search
+  uses. Where a match is kept, **the database's composition is what gets
+  stored** — the model estimated the portion, which is the hard part; it didn't
+  need to guess what the food contains.
+- Confidence below 0.6 is flagged in the draft before you reach the save button,
+  and the model's own calorie range is shown rather than a single false-precise
+  number.
+
+### The training bridge
+
+The part a calorie app on its own can't do (`src/lib/fuel/bridge.ts`, pure and
+tested):
+
+- **Training-day detection** bumps the water goal by 500 ml.
+- **Calorie cycling** (off by default) moves carbs onto the days you train and
+  funds them from rest days. The weekly total is held constant — it moves
+  calories, it doesn't create them.
+- **Cardio calories** (off by default, and it says why) estimates burn from
+  distance × bodyweight only, because distance and bodyweight are what the app
+  actually records. Lifting is deliberately excluded: the strength tracker logs
+  sets, not session duration, so any figure for it would be invented rather than
+  estimated.
+- **Protein vs progress** correlates weekly protein against weekly tonnage from
+  the strength tracker — and stays quiet unless there are two properly-logged
+  weeks and a real move to talk about.
+- **Bulk/cut coherence**: if the goal and the scale disagree for a fortnight,
+  Progress says so and suggests ±100–150 kcal. Never auto-applied.
+- One date shows both halves — the day's session appears on the Today screen.
 
 ## Scripts
 

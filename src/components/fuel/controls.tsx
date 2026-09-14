@@ -1,7 +1,58 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Modal plumbing for the logging sheet: hold focus inside it, stop the page
+ * behind it scrolling, and put focus back where it came from on close.
+ *
+ * A bottom sheet that doesn't trap focus lets a keyboard or screen-reader user
+ * tab straight out into the page underneath while the overlay still covers it
+ * — they end up operating controls they cannot see. `aria-modal` alone doesn't
+ * prevent that; something has to actually hold the focus ring.
+ */
+export function useDialogA11y(open: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const returnTo = document.activeElement as HTMLElement | null;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !ref.current) return;
+      const focusable = ref.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      // Wrap at both ends so Tab and Shift+Tab stay inside the sheet.
+      if (e.shiftKey && (active === first || !ref.current.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = overflow;
+      returnTo?.focus?.();
+    };
+  }, [open]);
+
+  return ref;
+}
 
 /**
  * The Fuel form primitives.
