@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, LineChart, Target } from "lucide-react";
+import { CalendarDays, ChefHat, LineChart, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/fuel", label: "Today", icon: CalendarDays },
   { href: "/fuel/progress", label: "Progress", icon: LineChart },
+  { href: "/fuel/foods", label: "Foods", icon: ChefHat },
   { href: "/fuel/profile", label: "Targets", icon: Target },
 ];
 

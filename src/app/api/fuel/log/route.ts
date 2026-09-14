@@ -5,7 +5,7 @@ import { FuelFood } from "@/models/FuelFood";
 import { FuelPortion } from "@/models/FuelPortion";
 import { FuelLog } from "@/models/FuelLog";
 import { fuelGuard } from "@/lib/fuel/server";
-import { FuelLogFoodSchema, FuelQuickAddSchema } from "@/lib/validation";
+import { FuelAiEntrySchema, FuelLogFoodSchema, FuelQuickAddSchema } from "@/lib/validation";
 import { entryMacrosFor } from "@/lib/fuel/log";
 import { resolveGrams } from "@/lib/fuel/portions";
 import { isValidIso, todayIso, addDaysIso } from "@/lib/date-utils";
@@ -36,6 +36,9 @@ export async function POST(req: Request) {
 
   const raw = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!raw) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+
+  const isAiDraft = raw.entryMethod === "photo" || raw.entryMethod === "text";
+  if (isAiDraft) return saveAiEntry(raw, guard.userId);
 
   const isQuickAdd = !raw.foodId;
   const parsed = isQuickAdd ? FuelQuickAddSchema.safeParse(raw) : FuelLogFoodSchema.safeParse(raw);
@@ -154,6 +157,97 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ entry: serialize(saved) }, { status: 201 });
   } catch {
+    return NextResponse.json(
+      { error: "Could not save. Check the database connection." },
+      { status: 503 },
+    );
+  }
+}
+
+/**
+ * Commit one row from an AI draft.
+ *
+ * Where the draft matched a real food, that food's composition wins and the
+ * model's numbers are thrown away — the model estimated the *portion*, which
+ * is the hard part; the database knows what the food contains, which isn't.
+ * Where nothing matched, the estimate is all there is, and the row records
+ * that fact rather than hiding it.
+ */
+async function saveAiEntry(raw: Record<string, unknown>, userId: string) {
+  const parsed = FuelAiEntrySchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+      { status: 400 },
+    );
+  }
+  const a = parsed.data;
+
+  if (a.localDate > addDaysIso(todayIso(), 1)) {
+    return NextResponse.json({ error: "You can only log today or a past day." }, { status: 400 });
+  }
+
+  try {
+    await connectDB();
+    const uid = new Types.ObjectId(userId);
+
+    let macros = {
+      kcal: Math.round(a.kcal),
+      proteinG: a.proteinG,
+      carbsG: a.carbsG,
+      fatG: a.fatG,
+      fiberG: a.fiberG,
+    };
+    let foodId: Types.ObjectId | null = null;
+
+    if (a.foodId) {
+      const food = await FuelFood.findOne({
+        _id: new Types.ObjectId(a.foodId),
+        $or: [{ ownerUserId: null }, { ownerUserId: uid }],
+      }).lean();
+      if (food) {
+        foodId = food._id;
+        macros = entryMacrosFor(food.per100g, a.gramsResolved);
+      }
+      // A match that has since vanished is not an error — the model's own
+      // estimate still stands, and the user already approved it.
+    }
+
+    const doc = {
+      userId: uid,
+      localDate: a.localDate,
+      loggedAt: new Date(),
+      meal: a.meal,
+      foodId,
+      portionId: null,
+      foodName: a.foodName,
+      portionLabel: null,
+      quantity: 1,
+      unit: "g",
+      gramsResolved: a.gramsResolved,
+      ...macros,
+      entryMethod: a.entryMethod,
+      confidence: a.confidence ?? null,
+      calorieRange: a.calorieRange ?? undefined,
+      assumptions: a.assumptions ?? null,
+      wasEdited: a.wasEdited,
+      photoUrl: null, // v1 never persists the image; see the vision route
+      clientId: a.clientId ?? null,
+    };
+
+    try {
+      const saved = await FuelLog.create(doc);
+      if (foodId) await FuelFood.updateOne({ _id: foodId }, { $inc: { popularity: 1 } });
+      return NextResponse.json({ entry: serialize(saved) }, { status: 201 });
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000 && doc.clientId) {
+        const existing = await FuelLog.findOne({ userId: uid, clientId: doc.clientId });
+        if (existing) return NextResponse.json({ entry: serialize(existing), duplicate: true });
+      }
+      throw err;
+    }
+  } catch (err) {
+    console.error("[fuel/log] ai entry failed:", err);
     return NextResponse.json(
       { error: "Could not save. Check the database connection." },
       { status: 503 },

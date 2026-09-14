@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, Loader2, Plus, Search, X, Zap } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Plus, ScanLine, Search, Sparkles, X, Zap } from "lucide-react";
+import { BarcodeScanner } from "./barcode-scanner";
+import { CreateFoodForm } from "./create-food-form";
+import { AiDraftReview } from "./ai-draft-review";
+import { useDialogA11y } from "./controls";
 import { entryMacrosFor } from "@/lib/fuel/log";
 import { resolveGrams } from "@/lib/fuel/portions";
 import { MEAL_LABELS, type Meal, type Per100g } from "@/lib/fuel/types";
@@ -10,13 +14,17 @@ import { cn } from "@/lib/utils";
 /**
  * The logging bottom sheet (§10, screen 2).
  *
- * Search field autofocused → ranked results → tap → portion sheet with a live
- * macro preview → Add. Two taps for a repeat food, which is the whole target:
- * the sheet opens showing what you actually eat before you have typed
- * anything, because the ranker treats an empty query as "show me my usuals".
+ * One sheet, five views. Search field autofocused → ranked results → tap →
+ * portion sheet with a live macro preview → Add. Two taps for a repeat food,
+ * because the ranker treats an empty query as "show me my usuals".
  *
- * The preview runs the same `entryMacrosFor` the server runs on save, so the
- * number the user agrees to is the number that gets stored.
+ * The other four views all funnel back into the portion sheet rather than
+ * logging directly: a barcode, a photo, a typed sentence and a hand-made food
+ * are all just different ways of arriving at "which food, how much", and the
+ * user confirms the amount in exactly one place.
+ *
+ * The macro preview runs the same `entryMacrosFor` the server runs on save, so
+ * the number the user agrees to is the number that gets stored.
  */
 
 export interface FoodResult {
@@ -32,21 +40,26 @@ export interface FoodResult {
   defaultPortion: { id: string; label: string; grams: number; kcal: number } | null;
 }
 
+type View = "search" | "portion" | "quick" | "scan" | "create" | "ai";
+
 const DEBOUNCE_MS = 180;
 
 export function LogSheet({
   open,
   meal,
   date,
+  initialView = "search",
   onClose,
   onLogged,
 }: {
   open: boolean;
   meal: Meal;
   date: string;
+  initialView?: View;
   onClose: () => void;
   onLogged: () => void;
 }) {
+  const [view, setView] = useState<View>(initialView);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FoodResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -58,26 +71,40 @@ export function LogSheet({
   const [quantity, setQuantity] = useState(1);
   const [saving, setSaving] = useState(false);
 
-  const [quickAdd, setQuickAdd] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
+
   const [quick, setQuick] = useState({ foodName: "", kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 });
 
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const dialogRef = useDialogA11y(open);
 
   const reset = useCallback(() => {
+    setView(initialView);
     setQuery("");
     setResults([]);
     setPicked(null);
     setPortionId(null);
     setQuantity(1);
-    setQuickAdd(false);
     setQuick({ foodName: "", kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 });
     setFailure(null);
+    setScanError(null);
+    setPendingBarcode(null);
+  }, [initialView]);
+
+  const choose = useCallback((food: FoodResult) => {
+    setPicked(food);
+    const def = food.portions.find((p) => p.isDefault) ?? food.portions[0] ?? null;
+    setPortionId(def?.id ?? null);
+    setQuantity(1);
+    setView("portion");
   }, []);
 
   // ── search, debounced and cancellable ──────────────────────────────
   useEffect(() => {
-    if (!open || picked || quickAdd) return;
+    if (!open || view !== "search") return;
 
     const handle = setTimeout(() => {
       abortRef.current?.abort();
@@ -103,39 +130,62 @@ export function LogSheet({
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(handle);
-  }, [query, open, picked, quickAdd]);
+  }, [query, open, view]);
 
   useEffect(() => {
     if (open) {
       reset();
-      // let the sheet paint before stealing focus, or iOS skips the keyboard
       const t = setTimeout(() => inputRef.current?.focus(), 60);
       return () => clearTimeout(t);
     }
   }, [open, meal, reset]);
 
+  const back = useCallback(() => {
+    setPicked(null);
+    setPortionId(null);
+    setQuantity(1);
+    setScanError(null);
+    setView("search");
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") (picked || quickAdd ? back() : onClose());
+      if (e.key === "Escape") (view === "search" ? onClose() : back());
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [open, view, onClose, back]);
 
-  function back() {
-    setPicked(null);
-    setQuickAdd(false);
-    setPortionId(null);
-    setQuantity(1);
-  }
-
-  function choose(food: FoodResult) {
-    setPicked(food);
-    const def = food.portions.find((p) => p.isDefault) ?? food.portions[0] ?? null;
-    setPortionId(def?.id ?? null);
-    setQuantity(1);
-  }
+  // ── barcode ────────────────────────────────────────────────────────
+  const lookUpBarcode = useCallback(
+    async (code: string) => {
+      setScanBusy(true);
+      setScanError(null);
+      try {
+        const res = await fetch(`/api/fuel/barcode?code=${encodeURIComponent(code)}`);
+        const json = await res.json();
+        if (!res.ok) {
+          setScanError(json.error ?? "That lookup failed.");
+          return;
+        }
+        if (!json.found) {
+          // Not a dead end: offer to add it, with the barcode already attached
+          // so the next scan of the same packet finds it.
+          setPendingBarcode(code);
+          setScanError(null);
+          setView("create");
+          return;
+        }
+        choose(json.food as FoodResult);
+      } catch {
+        setScanError("No connection. Check your network and try again.");
+      } finally {
+        setScanBusy(false);
+      }
+    },
+    [choose],
+  );
 
   const portion = useMemo(
     () => picked?.portions.find((p) => p.id === portionId) ?? null,
@@ -158,8 +208,7 @@ export function LogSheet({
           foodId: picked.id,
           portionId: portion.id,
           quantity,
-          entryMethod: picked.reason === "match" ? "search" : "favorite",
-          // idempotency: the same tap twice is one meal, not two
+          entryMethod: pendingBarcode ? "barcode" : picked.source === "recipe" ? "recipe" : "search",
           clientId: `${picked.id}-${date}-${meal}-${Date.now().toString(36)}`,
         }),
       });
@@ -208,6 +257,19 @@ export function LogSheet({
 
   if (!open) return null;
 
+  const title =
+    view === "portion" && picked
+      ? picked.name
+      : view === "quick"
+        ? "Quick add"
+        : view === "scan"
+          ? "Scan a barcode"
+          : view === "create"
+            ? "New food"
+            : view === "ai"
+              ? "Describe or snap it"
+              : MEAL_LABELS[meal];
+
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center">
       <button
@@ -218,14 +280,14 @@ export function LogSheet({
       />
 
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Log ${MEAL_LABELS[meal]}`}
         className="relative flex max-h-[88dvh] w-full max-w-lg flex-col rounded-t-2xl border border-edge bg-abyss pb-[env(safe-area-inset-bottom)] shadow-neon-green"
       >
-        {/* ── header ──────────────────────────────────────────────── */}
         <div className="flex items-center gap-2 border-b border-edge/70 px-4 py-3">
-          {(picked || quickAdd) && (
+          {view !== "search" && (
             <button
               type="button"
               onClick={back}
@@ -236,7 +298,7 @@ export function LogSheet({
             </button>
           )}
           <h2 className="flex-1 truncate font-display text-sm font-bold uppercase tracking-widest text-zinc-100">
-            {picked ? picked.name : quickAdd ? "Quick add" : MEAL_LABELS[meal]}
+            {title}
           </h2>
           <button
             type="button"
@@ -249,19 +311,27 @@ export function LogSheet({
         </div>
 
         {/* ── search ──────────────────────────────────────────────── */}
-        {!picked && !quickAdd && (
+        {view === "search" && (
           <>
-            <div className="relative px-4 py-3">
-              <Search className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-              <input
-                ref={inputRef}
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search — dal, 2 roti, paneer…"
-                aria-label="Search foods"
-                className="h-11 w-full rounded-xl border border-edge bg-void pl-10 pr-3 font-display text-base text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green"
-              />
+            <div className="px-4 py-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                <input
+                  ref={inputRef}
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search — dal, roti, paneer…"
+                  aria-label="Search foods"
+                  className="h-11 w-full rounded-xl border border-edge bg-void pl-10 pr-3 font-display text-base text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green"
+                />
+              </div>
+
+              <div className="mt-2 flex gap-2">
+                <Action icon={ScanLine} label="Scan" onClick={() => setView("scan")} />
+                <Action icon={Sparkles} label="Snap / describe" onClick={() => setView("ai")} />
+                <Action icon={Zap} label="Quick add" onClick={() => setView("quick")} />
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
@@ -283,12 +353,15 @@ export function LogSheet({
                       >
                         <span className="min-w-0">
                           <span className="flex items-center gap-1.5">
-                            <span className="truncate font-display text-sm text-zinc-100">{f.name}</span>
+                            <span className="truncate font-display text-sm text-zinc-100">
+                              {f.name}
+                            </span>
                             {f.reason === "frequent" && <Badge>often</Badge>}
                             {f.reason === "recent" && <Badge>recent</Badge>}
                             {!f.isVerified && <Badge tone="amber">unverified</Badge>}
                           </span>
                           <span className="mt-0.5 block truncate font-mono text-[10px] text-zinc-500">
+                            {f.brand ? `${f.brand} · ` : ""}
                             {f.defaultPortion
                               ? `${f.defaultPortion.label} · ${f.defaultPortion.grams} g`
                               : "per 100 g"}
@@ -307,7 +380,11 @@ export function LogSheet({
                   ))}
                 </ul>
               ) : (
-                <EmptyState query={query} onQuickAdd={() => setQuickAdd(true)} />
+                <EmptyState
+                  query={query}
+                  onCreate={() => setView("create")}
+                  onQuickAdd={() => setView("quick")}
+                />
               )}
 
               {failure && (
@@ -319,8 +396,39 @@ export function LogSheet({
           </>
         )}
 
+        {/* ── scan ────────────────────────────────────────────────── */}
+        {view === "scan" && (
+          <BarcodeScanner onCode={lookUpBarcode} busy={scanBusy} error={scanError} />
+        )}
+
+        {/* ── create a food ───────────────────────────────────────── */}
+        {view === "create" && (
+          <CreateFoodForm
+            initialName={pendingBarcode ? "" : query}
+            barcode={pendingBarcode}
+            onCreated={(food) => {
+              setPendingBarcode(null);
+              choose(food);
+            }}
+            onCancel={back}
+          />
+        )}
+
+        {/* ── AI draft (photo / natural language) ─────────────────── */}
+        {view === "ai" && (
+          <AiDraftReview
+            meal={meal}
+            date={date}
+            onLogged={() => {
+              onLogged();
+              onClose();
+            }}
+            onCancel={back}
+          />
+        )}
+
         {/* ── portion picker ──────────────────────────────────────── */}
-        {picked && (
+        {view === "portion" && picked && (
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
             <fieldset>
               <legend className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
@@ -341,7 +449,6 @@ export function LogSheet({
                     )}
                   >
                     <span className="block font-display text-sm">{p.label}</span>
-                    {/* the gram equivalent, always — this is how the mapping gets learned */}
                     <span className="font-mono text-[10px] text-zinc-500">{p.grams} g</span>
                   </button>
                 ))}
@@ -378,7 +485,9 @@ export function LogSheet({
                   +
                 </button>
               </div>
-              <p className="mt-1.5 text-center font-mono text-[10px] text-zinc-600">{grams} g total</p>
+              <p className="mt-1.5 text-center font-mono text-[10px] text-zinc-600">
+                {grams} g total
+              </p>
             </div>
 
             {preview && (
@@ -390,8 +499,12 @@ export function LogSheet({
                   { k: "fat", v: `${preview.fatG}g`, cls: "text-zinc-100" },
                 ].map((m) => (
                   <div key={m.k} className="rounded-xl border border-edge bg-void p-2 text-center">
-                    <dd className={cn("font-display text-base font-bold tabular-nums", m.cls)}>{m.v}</dd>
-                    <dt className="font-mono text-[9px] uppercase tracking-widest text-zinc-600">{m.k}</dt>
+                    <dd className={cn("font-display text-base font-bold tabular-nums", m.cls)}>
+                      {m.v}
+                    </dd>
+                    <dt className="font-mono text-[9px] uppercase tracking-widest text-zinc-600">
+                      {m.k}
+                    </dt>
                   </div>
                 ))}
               </dl>
@@ -399,7 +512,7 @@ export function LogSheet({
 
             {!picked.isVerified && (
               <p className="mt-3 font-mono text-[10px] leading-relaxed text-neon-amber">
-                This food&apos;s numbers haven&apos;t been verified against a composition database.
+                These numbers haven&apos;t been verified against a composition database.
               </p>
             )}
 
@@ -422,7 +535,7 @@ export function LogSheet({
         )}
 
         {/* ── quick add ───────────────────────────────────────────── */}
-        {quickAdd && (
+        {view === "quick" && (
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
             <p className="font-mono text-[11px] leading-relaxed text-zinc-500">
               No food, just numbers. For when you know roughly what it was and can&apos;t be
@@ -452,7 +565,10 @@ export function LogSheet({
                     inputMode="numeric"
                     value={String(quick[k])}
                     onChange={(e) =>
-                      setQuick((q) => ({ ...q, [k]: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 }))
+                      setQuick((q) => ({
+                        ...q,
+                        [k]: Number(e.target.value.replace(/[^0-9]/g, "")) || 0,
+                      }))
                     }
                     className="mt-1.5 h-11 w-full rounded-xl border border-edge bg-void px-3 text-center font-display text-lg text-zinc-100 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green"
                   />
@@ -482,6 +598,27 @@ export function LogSheet({
   );
 }
 
+function Action({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: typeof ScanLine;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-edge bg-void px-2 font-mono text-[10px] uppercase tracking-widest text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
+
 function Badge({ children, tone = "green" }: { children: React.ReactNode; tone?: "green" | "amber" }) {
   return (
     <span
@@ -495,25 +632,44 @@ function Badge({ children, tone = "green" }: { children: React.ReactNode; tone?:
   );
 }
 
-/** An empty state that offers a door, never a dead end (§6). */
-function EmptyState({ query, onQuickAdd }: { query: string; onQuickAdd: () => void }) {
+/** An empty state that offers doors, never a dead end (§6). */
+function EmptyState({
+  query,
+  onCreate,
+  onQuickAdd,
+}: {
+  query: string;
+  onCreate: () => void;
+  onQuickAdd: () => void;
+}) {
   return (
-    <div className="py-10 text-center">
+    <div className="py-8 text-center">
       <p className="font-display text-sm text-zinc-300">
         {query ? `Nothing matching “${query}”` : "Search for anything you ate"}
       </p>
       <p className="mx-auto mt-2 max-w-xs font-mono text-[11px] leading-relaxed text-zinc-500">
         {query
-          ? "Try a different spelling — or just put the numbers in yourself."
-          : "Dal, roti, paneer, whey… your usuals will show up here once you've logged a few."}
+          ? "Try a different spelling, add it yourself, or just put the numbers in."
+          : "Dal, roti, paneer, whey… your usuals show up here once you've logged a few."}
       </p>
-      <button
-        type="button"
-        onClick={onQuickAdd}
-        className="mx-auto mt-5 flex min-h-[44px] items-center gap-2 rounded-xl border border-edge px-4 font-mono text-[11px] uppercase tracking-widest text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100"
-      >
-        <Zap className="h-3.5 w-3.5" /> Quick add
-      </button>
+      {query && (
+        <div className="mt-5 flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={onCreate}
+            className="flex min-h-[44px] w-full max-w-xs items-center justify-center gap-2 rounded-xl border border-hot-green bg-hot-green/10 font-mono text-[11px] uppercase tracking-widest text-neon-green"
+          >
+            <Plus className="h-3.5 w-3.5" /> Create “{query.slice(0, 22)}”
+          </button>
+          <button
+            type="button"
+            onClick={onQuickAdd}
+            className="flex min-h-[44px] items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-zinc-400 hover:text-zinc-100"
+          >
+            <Zap className="h-3.5 w-3.5" /> Quick add instead
+          </button>
+        </div>
+      )}
     </div>
   );
 }

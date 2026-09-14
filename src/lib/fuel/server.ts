@@ -5,10 +5,12 @@ import { currentUserId } from "@/lib/auth-helpers";
 import { FuelProfile, type FuelProfileDoc } from "@/models/FuelProfile";
 import { FuelTarget } from "@/models/FuelTarget";
 import { FuelWeight } from "@/models/FuelWeight";
+import { FuelFood } from "@/models/FuelFood";
+import { FuelPortion } from "@/models/FuelPortion";
 import { Workout } from "@/models/Workout";
 import { isFuelEnabled } from "./flag";
 import { ageOn, computeTargets, type TargetResult } from "./engine";
-import type { MacroPreset } from "./types";
+import type { FoodSource, MacroPreset, Per100g, PortionUnit, VegFlag } from "./types";
 
 /**
  * Server-side plumbing shared by every /api/fuel route.
@@ -34,6 +36,64 @@ export async function fuelGuard(): Promise<Guard> {
     return { userId: null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
   return { userId, error: null };
+}
+
+export interface NewFood {
+  name: string;
+  brand?: string | null;
+  source: FoodSource;
+  sourceRef?: string | null;
+  per100g: Per100g;
+  vegFlag?: VegFlag;
+  aliases?: string[];
+  barcode?: string | null;
+  /** Only true for published composition data. Never for user or AI input. */
+  isVerified: boolean;
+  /** null = global (seeded); otherwise the food belongs to one user. */
+  ownerUserId: Types.ObjectId | null;
+  /** Household servings. A "100 g" row is appended automatically. */
+  portions?: Array<{ label: string; grams: number; unit?: PortionUnit }>;
+}
+
+/**
+ * Create a food and its portions together.
+ *
+ * Shared by the three P1 paths that mint foods — a barcode scan, a custom
+ * food, and the companion food behind a recipe — because each of them needs
+ * exactly the same invariants: a searchText that the ranker can work with, at
+ * least one portion so the picker is never empty, and a gram fallback so a
+ * kitchen scale is always an option.
+ */
+export async function createFood(food: NewFood): Promise<Types.ObjectId> {
+  const aliases = food.aliases ?? [];
+  const created = await FuelFood.create({
+    name: food.name,
+    brand: food.brand ?? null,
+    source: food.source,
+    sourceRef: food.sourceRef ?? null,
+    isVerified: food.isVerified,
+    per100g: food.per100g,
+    vegFlag: food.vegFlag ?? "unknown",
+    ownerUserId: food.ownerUserId,
+    aliases,
+    searchText: [food.name, food.brand ?? "", ...aliases].join(" ").toLowerCase().trim(),
+    barcode: food.barcode ?? null,
+    popularity: 0,
+  });
+
+  const rows = [...(food.portions ?? []), { label: "100 g", grams: 100, unit: "g" as PortionUnit }];
+  await FuelPortion.insertMany(
+    rows.map((p, i) => ({
+      foodId: created._id,
+      label: p.label,
+      grams: p.grams,
+      unit: p.unit ?? "household",
+      isDefault: i === 0,
+      sortOrder: i,
+    })),
+  );
+
+  return created._id;
 }
 
 export interface ProfileBundle {
