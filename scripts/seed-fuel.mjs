@@ -17,6 +17,7 @@
  */
 import { readFileSync, existsSync } from "node:fs";
 import mongoose from "mongoose";
+import { portionsFor } from "./fuel/portion-sets.mjs";
 
 const FOODS_JSON = "src/lib/data/fuel-foods.json";
 const args = process.argv.slice(2);
@@ -110,6 +111,27 @@ async function main() {
   }
 
   const now = new Date();
+
+  /**
+   * Write in batches. A single bulkWrite of 13,000 upserts plus ~50,000
+   * portions builds one enormous command and, on a small Atlas tier, times
+   * out. Batching also means a failure part-way leaves a usable database
+   * rather than nothing.
+   */
+  const BATCH = 500;
+  async function inBatches(label, ops, collection) {
+    let inserted = 0;
+    let modified = 0;
+    for (let i = 0; i < ops.length; i += BATCH) {
+      const res = await db.collection(collection).bulkWrite(ops.slice(i, i + BATCH), { ordered: false });
+      inserted += res.upsertedCount;
+      modified += res.modifiedCount;
+      process.stdout.write(`\r  ${label}: ${Math.min(i + BATCH, ops.length)}/${ops.length}`);
+    }
+    process.stdout.write("\r".padEnd(60) + "\r");
+    return { inserted, modified };
+  }
+
   const foodOps = foods.map((f) => ({
     updateOne: {
       filter: { source: "usda", sourceRef: f.sourceRef },
@@ -131,10 +153,9 @@ async function main() {
     },
   }));
 
-  const foodRes = await db.collection("fuelfoods").bulkWrite(foodOps, { ordered: false });
+  const foodRes = await inBatches("foods", foodOps, "fuelfoods");
   console.log(
-    `foods: ${foodRes.upsertedCount} inserted, ${foodRes.modifiedCount} updated, ` +
-      `${foods.length} in manifest`,
+    `foods: ${foodRes.inserted} inserted, ${foodRes.modified} updated, ${foods.length} in manifest`,
   );
 
   // ── portions (need the food _ids, so this is a second pass) ─────────
@@ -149,7 +170,10 @@ async function main() {
   for (const f of foods) {
     const foodId = idByRef.get(f.sourceRef);
     if (!foodId) continue;
-    for (const p of f.portions ?? []) {
+    // `portionSet` is a name; expand it here so the gram conventions have one
+    // home. Older manifests inlined `portions`, so both are accepted.
+    const rows = f.portions ?? (f.portionSet ? portionsFor(f.portionSet) : []);
+    for (const p of rows) {
       portionOps.push({
         updateOne: {
           filter: { foodId, label: p.label },
@@ -170,11 +194,9 @@ async function main() {
   }
 
   if (portionOps.length > 0) {
-    const portionRes = await db
-      .collection("fuelportions")
-      .bulkWrite(portionOps, { ordered: false });
+    const portionRes = await inBatches("portions", portionOps, "fuelportions");
     console.log(
-      `portions: ${portionRes.upsertedCount} inserted, ${portionRes.modifiedCount} updated, ` +
+      `portions: ${portionRes.inserted} inserted, ${portionRes.modified} updated, ` +
         `${portionOps.length} in manifest`,
     );
   }

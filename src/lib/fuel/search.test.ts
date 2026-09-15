@@ -141,6 +141,33 @@ describe("verified data breaks ties", () => {
   });
 });
 
+describe("regressions found against the full 13k database", () => {
+  it("does not treat a substring buried mid-word as a real match", () => {
+    // "classic".includes("lassi") is true, and this put an Arby's roast beef
+    // sandwich at the top of a search for lassi.
+    const arbys = food("arbys", "ARBY'S, roast beef sandwich, classic");
+    const lassi = food("lassi", "Sweet Lassi", ["lassi"]);
+    expect(matchScore("lassi", arbys)).toBeLessThan(matchScore("lassi", lassi));
+    expect(matchScore("lassi", arbys)).toBeLessThan(0.5);
+  });
+
+  it("prefers the base food over an elaborate variant", () => {
+    // An alias like "chawal" is attached to every rice row; without a length
+    // preference the winner was arbitrary and "Baby Toddler cereal, rice, dry"
+    // beat plain rice.
+    const plain = food("plain", "Rice, white, cooked", ["chawal"]);
+    const baby = food("baby", "Baby Toddler cereal, rice, dry, instant fortified", ["chawal"]);
+    const ranked = rankFoods("chawal", [baby, plain]);
+    expect(ranked[0].food.id).toBe("plain");
+  });
+
+  it("still ranks an exact name above a shorter unrelated one", () => {
+    const naan = food("naan", "Bread, naan", ["naan"]);
+    const roti = food("roti", "Bread, chapati or roti, whole wheat", ["roti", "chapati"]);
+    expect(rankFoods("roti", [naan, roti])[0].food.id).toBe("roti");
+  });
+});
+
 describe("matchScore", () => {
   it("is zero when a token matches nothing", () => {
     expect(matchScore("paneer tikka", DB[2])).toBe(0);

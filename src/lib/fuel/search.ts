@@ -98,7 +98,12 @@ export function editDistanceWithin(a: string, b: string, max: number): number {
 function tokenScore(query: string, candidate: string): number {
   if (query === candidate) return 1;
   if (candidate.startsWith(query)) return query.length >= 2 ? 0.85 : 0.6;
-  if (candidate.includes(query)) return query.length >= 3 ? 0.65 : 0.3;
+
+  // A substring buried mid-word is usually a coincidence, not a match:
+  // "classic".includes("lassi") is true, and that put an Arby's sandwich at
+  // the top of a search for lassi. Scored well below a prefix so it can only
+  // win when nothing better exists.
+  if (candidate.includes(query)) return query.length >= 4 ? 0.4 : 0.2;
 
   const budget = query.length >= 6 ? 2 : query.length >= 4 ? 1 : 0;
   if (budget > 0) {
@@ -145,6 +150,13 @@ export function matchScore(query: string, candidate: SearchCandidate): number {
   const q = normalize(query);
   if (name === q) score += 0.5;
   else if (name.startsWith(q)) score += 0.25;
+
+  // Prefer the base food over an elaborate variant. With 13,000 rows, an
+  // alias like "chawal" is attached to every rice entry, and without this the
+  // winner is arbitrary — "Baby Toddler cereal, rice, dry" beat plain rice.
+  // Someone searching a bare ingredient almost always wants the simple one.
+  const wordCount = name.split(" ").length;
+  score -= Math.min(wordCount, 10) * 0.03;
 
   return score;
 }

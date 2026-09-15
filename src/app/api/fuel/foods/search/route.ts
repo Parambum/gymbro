@@ -31,6 +31,13 @@ export const runtime = "nodejs";
  */
 const FUZZY_POOL_SIZE = 300;
 
+/**
+ * Minimum rank score for a result found only by fuzzy matching against the
+ * widened pool. A prefix match on a real word scores ~85 before bonuses; a
+ * coincidental substring scores ~40. This sits between them.
+ */
+const FUZZY_FLOOR = 60;
+
 export async function GET(req: Request) {
   const guard = await fuelGuard();
   if (guard.error) return guard.error;
@@ -68,6 +75,8 @@ export async function GET(req: Request) {
 
     // ── stage 1: narrow ─────────────────────────────────────────────
     let pool: Array<Record<string, unknown>> = [];
+    let narrowHits = 0;
+    const seen = new Set<string>();
     if (tokenize(q).length > 0) {
       const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -75,12 +84,17 @@ export async function GET(req: Request) {
       // execution plan for a $text clause nested inside $or, so it must sit at
       // the top level. Merging here costs one extra round trip and keeps the
       // text index doing the work it is for.
+      //
+      // The regex is word-anchored. An unanchored one matches substrings
+      // buried mid-word — `/lassi/` hits "classic" — which put an Arby's
+      // sandwich at the top of a search for lassi.
       const [textHits, regexHits] = await Promise.all([
         FuelFood.find({ $text: { $search: q }, ...visible }).limit(60).lean(),
-        FuelFood.find({ searchText: { $regex: escaped, $options: "i" }, ...visible }).limit(60).lean(),
+        FuelFood.find({ searchText: { $regex: `\\b${escaped}`, $options: "i" }, ...visible })
+          .limit(60)
+          .lean(),
       ]);
 
-      const seen = new Set<string>();
       pool = [...textHits, ...regexHits].filter((f) => {
         const id = String(f._id);
         if (seen.has(id)) return false;
@@ -88,13 +102,32 @@ export async function GET(req: Request) {
         return true;
       });
 
-      // Nothing useful came back — this is the typo case. Widen, then let the
-      // ranker decide; it will return nothing if nothing is genuinely close.
+      narrowHits = pool.length;
+
+      // Few hits — possibly a typo. Widen the pool, but ADD to it rather than
+      // replace: a rare exact match ("paneer" matches two rows out of 13,000)
+      // would otherwise be thrown away in favour of foods that don't match at
+      // all. That bug made correct spellings fail while typos returned junk.
+      //
+      // The widening is anchored on the query's first few characters rather
+      // than "most popular", because a blind sample of 300 out of 13,000 is
+      // 2% and almost never contains the word the user meant. Typos usually
+      // preserve the opening — "panner" for "paneer" — so this puts the right
+      // candidates in front of the edit-distance check.
       if (pool.length < 5) {
-        pool = await FuelFood.find(visible)
-          .sort({ isVerified: -1, popularity: -1 })
+        const stem = escaped.slice(0, Math.min(3, Math.max(2, escaped.length - 1)));
+        const widened = await FuelFood.find({
+          searchText: { $regex: `\\b${stem}`, $options: "i" },
+          ...visible,
+        })
           .limit(FUZZY_POOL_SIZE)
           .lean();
+        for (const f of widened) {
+          if (!seen.has(String(f._id))) {
+            seen.add(String(f._id));
+            pool.push(f);
+          }
+        }
       }
     } else {
       // No query: show what they actually eat, so a repeat is three taps.
@@ -119,7 +152,15 @@ export async function GET(req: Request) {
       source: f.source as string,
     }));
 
-    const ranked = rankFoods(q, candidates, { frequentIds, recentIds, favoriteIds }, limit);
+    let ranked = rankFoods(q, candidates, { frequentIds, recentIds, favoriteIds }, limit);
+
+    // When the database didn't actually match anything and we're only looking
+    // at the widened pool, insist on a genuinely close match. Without this a
+    // search for a food we don't stock returns whatever fuzzy-matched least
+    // badly, which reads as the app being wrong rather than the food missing.
+    if (narrowHits === 0 && tokenize(q).length > 0) {
+      ranked = ranked.filter((r) => r.score >= FUZZY_FLOOR);
+    }
 
     // ── attach each food's default portion + its macros ─────────────
     const ids = ranked.map((r) => new Types.ObjectId(r.food.id));
