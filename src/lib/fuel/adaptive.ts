@@ -92,7 +92,19 @@ export function estimateAdaptiveTdee(
   };
 
   const logged = intake.filter((d) => d.kcal > 0).sort((a, b) => a.date.localeCompare(b.date));
-  if (logged.length === 0 || trend.length < 2) return empty;
+
+  // Day one. Say what's needed rather than returning a silent null — "—" with
+  // no explanation reads as broken, not as "not yet".
+  if (logged.length === 0 || trend.length < 2) {
+    return {
+      ...empty,
+      loggedDays: logged.length,
+      note:
+        trend.length < 2
+          ? "Weigh in a few more times and this starts reading your real burn instead of a formula."
+          : `${MIN_LOGGED_DAYS - logged.length} more logged days and this starts reading your real burn instead of a formula.`,
+    };
+  }
 
   const last = logged[logged.length - 1].date;
   const window = logged.filter((d) => daysBetween(d.date, last) <= windowDays);

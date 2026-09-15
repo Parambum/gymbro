@@ -8,7 +8,19 @@ import type { NextAuthConfig } from "next-auth";
  * Route protection and the JWT↔session id plumbing live here because they
  * are shared by both the edge middleware and the Node server.
  */
-const PROTECTED_PREFIXES = ["/dashboard", "/train", "/cardio", "/analytics", "/history", "/fuel"];
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/train",
+  "/cardio",
+  "/analytics",
+  "/history",
+  "/fuel",
+  "/plan",
+];
+// `/start` is deliberately NOT here. Middleware protection sends every
+// unauthenticated visitor to the configured sign-in page, and a beginner who
+// just clicked "Build my plan" should land on sign-UP. The page guards itself
+// and redirects to the right door.
 
 export const authConfig = {
   trustHost: true,

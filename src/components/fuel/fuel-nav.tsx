@@ -2,11 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, ChefHat, LineChart, Target } from "lucide-react";
+import { CalendarDays, ChefHat, ClipboardList, LineChart, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Plan lives here rather than in the main nav: the app nav is already at six
+ * tabs, and a seventh puts each one under 55px at 390px — below a comfortable
+ * thumb target. The plan is also a starting point rather than a daily
+ * destination, so it belongs one level in.
+ */
 const TABS = [
   { href: "/fuel", label: "Today", icon: CalendarDays },
+  { href: "/plan", label: "Plan", icon: ClipboardList },
   { href: "/fuel/progress", label: "Progress", icon: LineChart },
   { href: "/fuel/foods", label: "Foods", icon: ChefHat },
   { href: "/fuel/profile", label: "Targets", icon: Target },
