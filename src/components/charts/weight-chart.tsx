@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AXIS_INK, FUEL_SERIES, GRID, TREND } from "@/lib/chart-palette";
+import { chartSeries, useChartPalette } from "@/lib/chart-palette";
 
 export interface WeightPoint {
   date: string;
@@ -47,22 +47,25 @@ export function WeightChart({
   const min = Math.floor(Math.min(...values) - 1);
   const max = Math.ceil(Math.max(...values) + 1);
 
+  const palette = useChartPalette();
+  const hues = chartSeries(palette);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={series} margin={{ top: 8, right: 10, bottom: 0, left: -12 }}>
-        <CartesianGrid stroke={GRID} vertical={false} />
+        <CartesianGrid stroke={palette.grid} vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={dayLabel}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
-          axisLine={{ stroke: GRID }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          axisLine={{ stroke: palette.grid }}
           tickLine={false}
           minTickGap={28}
         />
         <YAxis
           domain={[min, max]}
           tickFormatter={(v: number) => `${v}`}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
           axisLine={false}
           tickLine={false}
           width={38}
@@ -70,11 +73,11 @@ export function WeightChart({
         {goalKg != null && (
           <ReferenceLine
             y={goalKg}
-            stroke={AXIS_INK}
+            stroke={palette.axis}
             strokeDasharray="4 4"
             label={{
               value: `goal ${goalKg}`,
-              fill: AXIS_INK,
+              fill: palette.axis,
               fontSize: 9,
               fontFamily: "var(--font-mono)",
               position: "insideTopRight",
@@ -82,7 +85,7 @@ export function WeightChart({
           />
         )}
         <Tooltip
-          cursor={{ stroke: GRID }}
+          cursor={{ stroke: palette.grid }}
           content={({ active, payload }) =>
             active && payload?.length ? (
               <div className="rounded-lg border border-edge bg-void/95 px-3 py-2 font-mono text-xs">
@@ -95,11 +98,11 @@ export function WeightChart({
             ) : null
           }
         />
-        <Scatter dataKey="weightKg" fill={FUEL_SERIES.weight} shape="circle" />
+        <Scatter dataKey="weightKg" fill={hues.fuel.weight} shape="circle" />
         <Line
           type="monotone"
           dataKey="trendKg"
-          stroke={TREND}
+          stroke={palette.trend}
           strokeWidth={2}
           dot={false}
           activeDot={false}

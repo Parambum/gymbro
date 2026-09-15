@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { EyeOff, Loader2, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { SectionCard, Toggle } from "./controls";
+import { ThemePicker } from "@/components/theme-picker";
 import { ACTIVITY_LEVELS, type ActivityLevel, type Goal, type Sex } from "@/lib/fuel/types";
 import { ageOn, bmiOf, maxRateKgPerWeek } from "@/lib/fuel/engine";
 import { prettyDate, todayIso } from "@/lib/date-utils";
@@ -242,6 +243,10 @@ export function ProfileScreen() {
       </SectionCard>
 
       {/* ── settings ──────────────────────────────────────────────── */}
+      <SectionCard title="Appearance" hint="Set the tone of the whole app — applies instantly, everywhere.">
+        <ThemePicker />
+      </SectionCard>
+
       <SectionCard title="Settings">
         <div className="space-y-2">
           <Toggle

@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { STRENGTH_SERIES, GRID, AXIS_INK } from "@/lib/chart-palette";
+import { chartSeries, useChartPalette } from "@/lib/chart-palette";
 
 export interface VolumePoint {
   week: string; // ISO date of week start
@@ -29,20 +29,23 @@ export function VolumeChart({
   series: VolumePoint[];
   height?: number;
 }) {
+  const palette = useChartPalette();
+  const hues = chartSeries(palette);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={series} margin={{ top: 6, right: 8, bottom: 0, left: -10 }} barCategoryGap="28%">
-        <CartesianGrid stroke={GRID} vertical={false} />
+        <CartesianGrid stroke={palette.grid} vertical={false} />
         <XAxis
           dataKey="week"
           tickFormatter={weekLabel}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
-          axisLine={{ stroke: GRID }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          axisLine={{ stroke: palette.grid }}
           tickLine={false}
         />
         <YAxis
           tickFormatter={(v: number) => `${Math.round(v / 1000)}t`}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
           axisLine={false}
           tickLine={false}
           width={40}
@@ -60,7 +63,7 @@ export function VolumeChart({
             ) : null
           }
         />
-        <Bar dataKey="volumeKg" fill={STRENGTH_SERIES.volume} radius={[4, 4, 0, 0]} maxBarSize={26} />
+        <Bar dataKey="volumeKg" fill={hues.strength.volume} radius={[4, 4, 0, 0]} maxBarSize={26} />
       </BarChart>
     </ResponsiveContainer>
   );

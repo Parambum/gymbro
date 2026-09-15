@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { RADAR, GRID, AXIS_INK } from "@/lib/chart-palette";
+import { chartSeries, useChartPalette } from "@/lib/chart-palette";
 
 export interface RadarDatum {
   slug: string;
@@ -38,20 +38,23 @@ const SHORT: Record<string, string> = {
 export function BodyRadar({ data, height = 320 }: { data: RadarDatum[]; height?: number }) {
   const shaped = data.map((d) => ({ ...d, label: SHORT[d.slug] ?? d.muscle }));
 
+  const palette = useChartPalette();
+  const hues = chartSeries(palette);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RadarChart data={shaped} outerRadius="72%">
-        <PolarGrid stroke={GRID} />
+        <PolarGrid stroke={palette.grid} />
         <PolarAngleAxis
           dataKey="label"
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
         />
         <PolarRadiusAxis tick={false} axisLine={false} />
         <Radar
           dataKey="value"
-          stroke={RADAR}
+          stroke={hues.radar}
           strokeWidth={2}
-          fill={RADAR}
+          fill={hues.radar}
           fillOpacity={0.22}
           isAnimationActive
         />
