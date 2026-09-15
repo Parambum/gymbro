@@ -5,7 +5,7 @@
  * it. They come from the standard household-measure tables used in Indian
  * dietetics — a katori is a katori whatever you put in it. Nutrition figures,
  * by contrast, are never written by hand: they are fetched from USDA by
- * `fetch-fuel-foods.mjs`.
+ * `import-usda.mjs`.
  *
  * Grams are deliberately the *last* option on every food (§6): a user logging
  * dal thinks "one katori", and the gram equivalent is shown underneath so the

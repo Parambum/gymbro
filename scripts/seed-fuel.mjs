@@ -13,7 +13,7 @@
  * sourced from USDA are written, and `--prune` only ever removes those.
  * Custom foods, recipes and logs are out of its reach by construction.
  *
- * Run `node scripts/fetch-fuel-foods.mjs` first to produce the JSON.
+ * The food database ships in the repo; `npm run fuel:import` rebuilds it.
  */
 import { readFileSync, existsSync } from "node:fs";
 import mongoose from "mongoose";
@@ -24,11 +24,27 @@ const args = process.argv.slice(2);
 const prune = args.includes("--prune");
 const indexesOnly = args.includes("--indexes");
 
-const MONGODB_URI = readEnv("MONGODB_URI");
+/**
+ * Which database to seed.
+ *
+ * `--uri=` wins over the environment so production can be seeded without
+ * editing .env — which on a dev machine usually points at a local Mongo, and
+ * having to swap it back afterwards is exactly how someone seeds the wrong
+ * database.
+ */
+const uriArg = args.find((a) => a.startsWith("--uri="))?.slice("--uri=".length);
+const MONGODB_URI = uriArg || readEnv("MONGODB_URI");
 if (!MONGODB_URI) {
-  console.error("MONGODB_URI is not set. Copy .env.example to .env and add your Atlas string.");
+  console.error(
+    "No database given.\n" +
+      "  local      : set MONGODB_URI in .env, then `npm run fuel:seed`\n" +
+      '  production : npm run fuel:seed -- --uri="mongodb+srv://…"',
+  );
   process.exit(1);
 }
+
+// Say which database, without printing credentials.
+console.log(`target: ${MONGODB_URI.replace(/\/\/[^@]+@/, "//<credentials>@")}`);
 
 function readEnv(name) {
   if (process.env[name]) return process.env[name];
@@ -85,6 +101,14 @@ async function main() {
       await db.collection(collection).createIndex(spec, options);
       made += 1;
     } catch (err) {
+      // An index on the same keys under a different name is already doing the
+      // job — Mongo auto-names one if it was created before we started naming
+      // them. Re-reporting that as an error on every seed is noise that makes
+      // a healthy run look broken.
+      if (err.codeName === "IndexOptionsConflict" || /already exists with a different name/i.test(err.message)) {
+        made += 1;
+        continue;
+      }
       console.error(`  ! index on ${collection} ${JSON.stringify(spec)}: ${err.message}`);
     }
   }
@@ -96,8 +120,8 @@ async function main() {
   if (!existsSync(FOODS_JSON)) {
     console.error(
       `\n${FOODS_JSON} not found.\n` +
-        "Run `node scripts/fetch-fuel-foods.mjs` first — it fetches real composition\n" +
-        "data from USDA. Nothing in the food database is written by hand.",
+        "Run `npm run fuel:import` first — it builds the database from the USDA\n" +
+        "bulk exports. Nothing in the food database is written by hand.",
     );
     process.exitCode = 1;
     return;

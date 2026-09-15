@@ -227,38 +227,63 @@ Calorie and macro tracking, built alongside the strength tracker rather than
 on top of it: new `fuel*` collections only, no change to any workout table,
 route or component beyond one nav entry.
 
-**It ships dark.** Until `FUEL_ENABLED="true"` the tab is hidden, `/fuel`
-returns 404 and every `/api/fuel/*` route refuses. Turning it off again needs
-no redeploy of anything else.
+**On by default, with a kill switch.** `FUEL_ENABLED="false"` hides the tab,
+404s `/fuel` and refuses every `/api/fuel/*` route, without redeploying
+anything else.
 
 ### Setting it up
 
+The food database ships in the repo (`src/lib/data/fuel-foods.json`, 13,294
+foods), so all a fresh environment needs is to load it into Mongo:
+
 ```bash
-# 1. free USDA key, issued instantly, no approval:
-#    https://fdc.nal.usda.gov/api-key-signup.html
-#    → put it in .env as USDA_FDC_API_KEY
-npm run fuel:fetch      # build src/lib/data/fuel-foods.json from USDA
 npm run fuel:seed       # create the indexes + upsert the food database
-# 2. set FUEL_ENABLED="true" in .env
-npm run dev             # the Fuel tab appears
+npm run dev
 ```
 
-`fuel:fetch` is the only thing that ever talks to USDA — the running app
-never does, so production does not need the key. Without one it falls back to
-`DEMO_KEY`, which api.data.gov caps at 10 requests/hour.
+Seeding a **remote** database without touching `.env`:
+
+```bash
+npm run fuel:seed -- --uri="mongodb+srv://…"
+```
+
+Do this once per environment. Without it, search returns nothing and the meal
+planner declines to compose a day — the app runs, but its food database is
+empty.
+
+To rebuild the database from source, see **Rebuilding the food database**
+below. The running app never talks to USDA; that is a build-time step only.
 
 ### No invented nutrition data
 
-Every per-100g figure in the food database is fetched from USDA FoodData
-Central and stored with the `fdcId` it came from, so any number in the app can
-be traced to its source. A food the fetcher cannot match is reported as a miss
-and **does not ship** — there is no hand-typed composition anywhere. Run
-`npm run fuel:audit` to see exactly which upstream record each food resolved
-to before writing anything.
+Every per-100g figure comes from USDA FoodData Central and is stored with the
+`fdcId` it came from, so any number in the app can be traced to its source.
+Foods without a complete macro profile, or with composition that cannot be
+true, are dropped rather than filled in — there is no hand-typed composition
+anywhere.
 
-Household portions (katori, roti, scoop, glass) *are* project-curated, in
-`scripts/fuel/portion-sets.mjs`. Those describe how big a serving is, not
-what's in it.
+Household portions (katori, roti, scoop, glass) and the Hindi aliases *are*
+project-curated, in `scripts/fuel/portion-sets.mjs` and
+`scripts/fuel/portion-rules.mjs`. Those describe how big a serving is and what
+people call it — not what is in it.
+
+### Rebuilding the food database
+
+Only needed to refresh from a newer USDA release. Download the three bulk
+exports (**no API key required**) from
+<https://fdc.nal.usda.gov/download-datasets> and unzip them into
+`scripts-tmp/usda/{sr_legacy,survey,foundation}/`, then:
+
+```bash
+npm run fuel:import -- --stats   # report coverage, write nothing
+npm run fuel:import              # rewrite src/lib/data/fuel-foods.json
+npm run fuel:seed
+```
+
+Indian coverage is the known weak spot: USDA carries roughly 120 Indian
+dishes. The staples are present and searchable in Indian terms; khichdi, raita
+and lassi are not. Indian packaged brands arrive via Open Food Facts through
+the barcode scanner, which caches every scan into the database.
 
 ### Screens
 
@@ -357,8 +382,7 @@ tested):
 | `npm run build` / `start` | production |
 | `npm run typecheck` | strict TS, no emit |
 | `npm test` | unit tests (Vitest) — calorie engine, macros, portions, weight trend |
-| `npm run fuel:fetch` | build the food database from USDA FoodData Central |
-| `npm run fuel:audit` | show which USDA record each seed food matches, write nothing |
+| `npm run fuel:import` | rebuild the food database from the USDA bulk exports (`-- --stats` to report only) |
 | `npm run fuel:seed` | create Fuel indexes and upsert the food database |
 
 ## Verified

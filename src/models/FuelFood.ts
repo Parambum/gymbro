@@ -5,7 +5,7 @@ import { FOOD_SOURCES, VEG_FLAGS } from "@/lib/fuel/types";
  * One food, stored per 100 g so every portion is a multiplication.
  *
  * Global rows (`ownerUserId: null`) are the seeded database, fetched from USDA
- * and Open Food Facts by `scripts/fetch-fuel-foods.mjs`. Per-user rows are
+ * and Open Food Facts by `scripts/import-usda.mjs`. Per-user rows are
  * custom foods and saved recipes, visible only to their owner.
  *
  * `isVerified` is the honesty flag from §12: it is true only when the numbers
