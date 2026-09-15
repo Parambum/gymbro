@@ -221,6 +221,134 @@ and answers only with a shared `x-coach-token`.
 Without any model key the route returns 503 and the rest of the app is
 unaffected — the widget just reports that it needs one.
 
+## GymBro Fuel (nutrition module)
+
+Calorie and macro tracking, built alongside the strength tracker rather than
+on top of it: new `fuel*` collections only, no change to any workout table,
+route or component beyond one nav entry.
+
+**It ships dark.** Until `FUEL_ENABLED="true"` the tab is hidden, `/fuel`
+returns 404 and every `/api/fuel/*` route refuses. Turning it off again needs
+no redeploy of anything else.
+
+### Setting it up
+
+```bash
+# 1. free USDA key, issued instantly, no approval:
+#    https://fdc.nal.usda.gov/api-key-signup.html
+#    → put it in .env as USDA_FDC_API_KEY
+npm run fuel:fetch      # build src/lib/data/fuel-foods.json from USDA
+npm run fuel:seed       # create the indexes + upsert the food database
+# 2. set FUEL_ENABLED="true" in .env
+npm run dev             # the Fuel tab appears
+```
+
+`fuel:fetch` is the only thing that ever talks to USDA — the running app
+never does, so production does not need the key. Without one it falls back to
+`DEMO_KEY`, which api.data.gov caps at 10 requests/hour.
+
+### No invented nutrition data
+
+Every per-100g figure in the food database is fetched from USDA FoodData
+Central and stored with the `fdcId` it came from, so any number in the app can
+be traced to its source. A food the fetcher cannot match is reported as a miss
+and **does not ship** — there is no hand-typed composition anywhere. Run
+`npm run fuel:audit` to see exactly which upstream record each food resolved
+to before writing anything.
+
+Household portions (katori, roti, scoop, glass) *are* project-curated, in
+`scripts/fuel/portion-sets.mjs`. Those describe how big a serving is, not
+what's in it.
+
+### Screens
+
+| Route | What it is |
+|---|---|
+| `/fuel` | Today — calorie ring, macro bars, water, four meal cards, day navigator, the day's training |
+| `/fuel/progress` | Weight trend, calorie adherence (7/30/90 day), macro averages, protein-vs-volume, streak |
+| `/fuel/foods` | Custom foods and the recipe builder |
+| `/fuel/profile` | Targets, your numbers, settings, disclaimer |
+| `/fuel/onboarding` | Five-step setup that produces the first target |
+
+### Five ways to log
+
+Everything funnels into the same portion sheet, so the amount is confirmed in
+exactly one place:
+
+| Path | What it does |
+|---|---|
+| **Search** | Debounced, typo- and transliteration-tolerant. `dhal`/`daal`/`dal` all hit; `panner` finds paneer. An empty query lists what you actually eat, so a repeat meal is three taps. |
+| **Barcode** | Native `BarcodeDetector` where the browser has it (Chrome/Android), number pad everywhere else. Open Food Facts, cached — including misses. |
+| **Snap a meal** | Photo → Claude vision → an editable draft. Never auto-saved. |
+| **Describe it** | "2 roti, 1 katori dal aur ek glass doodh" → the same draft. Handles Hinglish. |
+| **Quick add** | Raw numbers, no food behind them, for when looking it up isn't worth it. |
+
+Plus **custom foods** (created inline when search comes up empty) and
+**recipes** (ingredients ÷ servings, saved as a food you can search for).
+
+**Search never trusts the client.** The request says *what* was eaten and *how
+much*; the server resolves grams from the stored portion and recomputes every
+macro from the food's own composition. Those macros are then frozen into the
+log row along with the food's name, so correcting a food later never rewrites
+history. Repeat saves carry a `clientId` and are idempotent — a double tap on a
+slow connection logs one meal.
+
+### The calorie engine
+
+`src/lib/fuel/engine.ts` — Mifflin-St Jeor → TDEE → goal adjustment → macro
+split, pure functions with no I/O, covered by `npm test`. Safety rules are
+hard clamps, not warnings: loss capped at 0.75 %/week and gain at 0.35 % of
+bodyweight, never a target below 1500 kcal (male) / 1200 kcal (female), and
+never below the user's own BMR. Each clamp returns one plain sentence that the
+UI prints verbatim. A manual target override is re-floored server-side, so the
+limits cannot be posted around.
+
+Targets are **append-only**: recalculating inserts a row with a new
+`effectiveFrom` instead of overwriting, so a day in the past is always read
+against the target that was actually in force then.
+
+### The AI paths
+
+Photo and natural-language logging go through `ANTHROPIC_API_KEY` (§7 specifies
+the Anthropic API; the chat coach's Groq option doesn't apply here). Without the
+key those two routes return 503 and say so — search, barcode, custom foods and
+quick-add all keep working, which is the point of never making AI the only way in.
+
+- **Nothing is ever auto-saved.** Both routes return a draft; the user edits it
+  and commits through `/api/fuel/log` like any other entry.
+- **Photos are never persisted.** The image is compressed client-side, sent to
+  the model in memory, and dropped when the request ends. `FuelLog.photoUrl`
+  exists for a future blob store and is always null today — which makes "delete
+  the photo with the entry" trivially true.
+- Items are matched against the food database through the same ranker search
+  uses. Where a match is kept, **the database's composition is what gets
+  stored** — the model estimated the portion, which is the hard part; it didn't
+  need to guess what the food contains.
+- Confidence below 0.6 is flagged in the draft before you reach the save button,
+  and the model's own calorie range is shown rather than a single false-precise
+  number.
+
+### The training bridge
+
+The part a calorie app on its own can't do (`src/lib/fuel/bridge.ts`, pure and
+tested):
+
+- **Training-day detection** bumps the water goal by 500 ml.
+- **Calorie cycling** (off by default) moves carbs onto the days you train and
+  funds them from rest days. The weekly total is held constant — it moves
+  calories, it doesn't create them.
+- **Cardio calories** (off by default, and it says why) estimates burn from
+  distance × bodyweight only, because distance and bodyweight are what the app
+  actually records. Lifting is deliberately excluded: the strength tracker logs
+  sets, not session duration, so any figure for it would be invented rather than
+  estimated.
+- **Protein vs progress** correlates weekly protein against weekly tonnage from
+  the strength tracker — and stays quiet unless there are two properly-logged
+  weeks and a real move to talk about.
+- **Bulk/cut coherence**: if the goal and the scale disagree for a fortnight,
+  Progress says so and suggests ±100–150 kcal. Never auto-applied.
+- One date shows both halves — the day's session appears on the Today screen.
+
 ## Scripts
 
 | Command | Effect |
@@ -228,6 +356,10 @@ unaffected — the widget just reports that it needs one.
 | `npm run dev` | dev server |
 | `npm run build` / `start` | production |
 | `npm run typecheck` | strict TS, no emit |
+| `npm test` | unit tests (Vitest) — calorie engine, macros, portions, weight trend |
+| `npm run fuel:fetch` | build the food database from USDA FoodData Central |
+| `npm run fuel:audit` | show which USDA record each seed food matches, write nothing |
+| `npm run fuel:seed` | create Fuel indexes and upsert the food database |
 
 ## Verified
 
@@ -235,3 +367,11 @@ Built and driven end-to-end against a real MongoDB: signup → login → blank
 dashboard → 3D click-to-log (incl. a custom exercise) → populated dashboard,
 per-muscle analytics, body radar, and calendar history — all real writes, no
 seeded data. e1RM math checks out (60 kg × 10 → 80.0, 100 kg × 9 → 130.0).
+
+**Fuel:** 98 unit tests (`npm test`) over the calorie engine, macro split,
+portion resolution, weight smoothing, search ranking and streaks. Driven end to
+end against a running server and a real MongoDB: register → onboard → search
+→ log → day totals → water → weigh-in → progress → delete, including the cases
+that matter — an aggressive rate capped and explained, a manual target raised
+back to BMR, client-sent macros ignored in favour of the food's own data, a
+repeated save landing once, and a signed-out request bounced.

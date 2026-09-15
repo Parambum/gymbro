@@ -146,4 +146,16 @@ video {
     animation: none;
     display: none;
   }
+
+  /* Skeletons pulse and rings sweep on load; both are decoration, and a
+     reduced-motion request should mean the whole app, not just the scanline.
+     The elements stay visible — only the movement stops. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

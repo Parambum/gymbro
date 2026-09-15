@@ -1,0 +1,273 @@
+{
+  "generatedAt": "2026-09-14T07:42:15.147Z",
+  "source": "USDA FoodData Central (Foundation, SR Legacy, Survey/FNDDS)",
+  "license": "Public domain (17 U.S.C. §105). Portion conventions are project-curated.",
+  "count": 5,
+  "foods": [
+    {
+      "key": "dal-masoor",
+      "name": "Masoor Dal (cooked)",
+      "aliases": [
+        "red lentil",
+        "masur dal",
+        "dhal",
+        "daal"
+      ],
+      "vegFlag": "veg",
+      "source": "usda",
+      "sourceRef": "175254",
+      "usdaDescription": "Lentils, mature seeds, cooked, boiled, with salt",
+      "usdaDataType": "SR Legacy",
+      "isVerified": true,
+      "per100g": {
+        "kcal": 114,
+        "proteinG": 9.02,
+        "carbsG": 19.5,
+        "fatG": 0.38,
+        "fiberG": 7.9,
+        "sugarG": 1.8,
+        "sodiumMg": 238
+      },
+      "portions": [
+        {
+          "label": "1 katori (small)",
+          "grams": 150,
+          "unit": "household",
+          "isDefault": true,
+          "sortOrder": 0
+        },
+        {
+          "label": "1 katori (medium)",
+          "grams": 200,
+          "unit": "household",
+          "isDefault": false,
+          "sortOrder": 1
+        },
+        {
+          "label": "1 katori (large)",
+          "grams": 250,
+          "unit": "household",
+          "isDefault": false,
+          "sortOrder": 2
+        },
+        {
+          "label": "100 g",
+          "grams": 100,
+          "unit": "g",
+          "isDefault": false,
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "key": "egg-whole",
+      "name": "Egg, whole (boiled)",
+      "aliases": [
+        "anda",
+        "boiled egg",
+        "ande"
+      ],
+      "vegFlag": "egg",
+      "source": "usda",
+      "sourceRef": "173424",
+      "usdaDescription": "Egg, whole, cooked, hard-boiled",
+      "usdaDataType": "SR Legacy",
+      "isVerified": true,
+      "per100g": {
+        "kcal": 155,
+        "proteinG": 12.6,
+        "carbsG": 1.12,
+        "fatG": 10.6,
+        "fiberG": 0,
+        "sugarG": 1.12,
+        "sodiumMg": 124
+      },
+      "portions": [
+        {
+          "label": "1 egg (medium)",
+          "grams": 50,
+          "unit": "household",
+          "isDefault": true,
+          "sortOrder": 0
+        },
+        {
+          "label": "1 egg (large)",
+          "grams": 60,
+          "unit": "household",
+          "isDefault": false,
+          "sortOrder": 1
+        },
+        {
+          "label": "1 egg white",
+          "grams": 33,
+          "unit": "household",
+          "isDefault": false,
+          "sortOrder": 2
+        },
+        {
+          "label": "100 g",
+          "grams": 100,
+          "unit": "g",
+          "isDefault": false,
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "key": "paneer",
+      "name": "Paneer",
+      "aliases": [
+        "cottage cheese",
+        "panir"
+      ],
+      "vegFlag": "veg",
+      "source": "usda",
+      "sourceRef": "2705740",
+      "usdaDescription": "Cheese, paneer",
+      "usdaDataType": "Survey (FNDDS)",
+      "isVerified": true,
+      "per100g": {
+        "kcal": 299,
+        "proteinG": 15.86,
+        "carbsG": 22.46,
+        "fatG": 15.52,
+        "fiberG": 0,
+        "sugarG": 23.33,
+        "sodiumMg": 185
+      },
+      "portions": [
+        {
+          "label": "1 katori (small)",
+          "grams": 150,
+          "unit": "household",
+          "isDefault": true,
+          "sortOrder": 0
+        },
+        {
+          "label": "50 g (4–5 cubes)",
+          "grams": 50,
+          "unit": "g",
+          "isDefault": false,
+          "sortOrder": 1
+        },
+        {
+          "label": "100 g",
+          "grams": 100,
+          "unit": "g",
+          "isDefault": false,
+          "sortOrder": 2
+        }
+      ]
+    },
+    {
+      "key": "rice-white-cooked",
+      "name": "Rice, white (cooked)",
+      "aliases": [
+        "chawal",
+        "bhaat",
+        "steamed rice",
+        "plain rice"
+      ],
+      "vegFlag": "veg",
+      "source": "usda",
+      "sourceRef": "2708408",
+      "usdaDescription": "Rice, white, cooked, no added fat",
+      "usdaDataType": "Survey (FNDDS)",
+      "isVerified": true,
+      "per100g": {
+        "kcal": 129,
+        "proteinG": 2.67,
+        "carbsG": 27.99,
+        "fatG": 0.28,
+        "fiberG": 0.4,
+        "sugarG": 0.05,
+        "sodiumMg": 245
+      },
+      "portions": [
+        {
+          "label": "1 katori (medium)",
+          "grams": 200,
+          "unit": "household",
+          "isDefault": true,
+          "sortOrder": 0
+        },
+        {
+          "label": "1 plate",
+          "grams": 300,
+          "unit": "household",
+          "isDefault": false,
+          "sortOrder": 1
+        },
+        {
+          "label": "1 cup, cooked",
+          "grams": 158,
+          "unit": "household",
+          "isDefault": false,
+          "sortOrder": 2
+        },
+        {
+          "label": "100 g",
+          "grams": 100,
+          "unit": "g",
+          "isDefault": false,
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "key": "roti",
+      "name": "Roti / Chapati (whole wheat)",
+      "aliases": [
+        "chapati",
+        "phulka",
+        "roti",
+        "atta roti"
+      ],
+      "vegFlag": "veg",
+      "source": "usda",
+      "sourceRef": "174075",
+      "usdaDescription": "Bread, chapati or roti, whole wheat, commercially prepared, frozen",
+      "usdaDataType": "SR Legacy",
+      "isVerified": true,
+      "per100g": {
+        "kcal": 299,
+        "proteinG": 7.85,
+        "carbsG": 46.1,
+        "fatG": 9.2,
+        "fiberG": 9.7,
+        "sugarG": 2.93,
+        "sodiumMg": 298
+      },
+      "portions": [
+        {
+          "label": "1 roti / chapati",
+          "grams": 40,
+          "unit": "household",
+          "isDefault": true,
+          "sortOrder": 0
+        },
+        {
+          "label": "1 large roti",
+          "grams": 55,
+          "unit": "household",
+          "isDefault": false,
+          "sortOrder": 1
+        },
+        {
+          "label": "1 paratha",
+          "grams": 65,
+          "unit": "household",
+          "isDefault": false,
+          "sortOrder": 2
+        },
+        {
+          "label": "100 g",
+          "grams": 100,
+          "unit": "g",
+          "isDefault": false,
+          "sortOrder": 3
+        }
+      ]
+    }
+  ]
+}
