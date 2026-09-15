@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import gsap from "gsap";
 import { Droplet, Dumbbell, Minus } from "lucide-react";
 import { progressFraction } from "@/lib/fuel/targets";
 import type { MacroTotals } from "@/lib/fuel/types";
@@ -14,6 +16,47 @@ import { cn } from "@/lib/utils";
  * have one. Amber also never carries meaning alone — the number underneath
  * says "220 over" in words.
  */
+
+/**
+ * Count a number up to its new value instead of snapping.
+ *
+ * Deliberately short (450 ms) and reduced-motion aware. This is the one number
+ * on the screen people actually watch, and seeing it move when food is logged
+ * makes the app feel responsive — but it is also the screen someone opens
+ * mid-meal, so it must never delay reading the figure.
+ */
+function useCountUp(value: number) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const previous = useRef(value);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || previous.current === value) {
+      el.textContent = String(Math.round(value));
+      previous.current = value;
+      return;
+    }
+
+    const counter = { n: previous.current };
+    previous.current = value;
+    const tween = gsap.to(counter, {
+      n: value,
+      duration: 0.45,
+      ease: "power2.out",
+      onUpdate: () => {
+        el.textContent = String(Math.round(counter.n));
+      },
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [value]);
+
+  return ref;
+}
 
 const RING_SIZE = 200;
 const RING_STROKE = 14;
@@ -32,6 +75,7 @@ export function CalorieRing({
   const fraction = target ? progressFraction(consumed, target) : 0;
   const over = target != null && consumed > target;
   const remaining = target != null ? Math.round(target - consumed) : null;
+  const headline = useCountUp(remaining != null ? Math.abs(remaining) : Math.round(consumed));
 
   // The arc stops at a full turn; the overage is reported in the label rather
   // than by a ring that wraps around and lies about where you are.
@@ -79,7 +123,9 @@ export function CalorieRing({
           </>
         ) : target == null ? (
           <>
-            <span className="font-display text-4xl font-bold text-zinc-100">{Math.round(consumed)}</span>
+            <span ref={headline} className="font-display text-4xl font-bold tabular-nums text-zinc-100">
+              {Math.round(consumed)}
+            </span>
             <span className="mt-1 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
               kcal logged
             </span>
@@ -87,6 +133,7 @@ export function CalorieRing({
         ) : (
           <>
             <span
+              ref={headline}
               className={cn(
                 "font-display text-5xl font-bold tabular-nums",
                 over ? "text-neon-amber" : "text-neon-green",

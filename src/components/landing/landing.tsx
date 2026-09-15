@@ -8,6 +8,10 @@ import { useGSAP } from "@gsap/react";
 import { ArrowRight, Camera, Dumbbell, Flame, LineChart, ScanLine, Sparkles } from "lucide-react";
 import { GymBroMark } from "@/components/brand/gymbro-logo";
 import { ThemePicker } from "@/components/theme-picker";
+import { Spotlight } from "@/components/ui/spotlight";
+import { CardSpotlight } from "@/components/ui/card-spotlight";
+import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
+import { Meteors } from "@/components/ui/meteors";
 import { cn } from "@/lib/utils";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -161,6 +165,7 @@ export function Landing({ signedIn }: { signedIn: boolean }) {
         data-hero
         className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden px-4"
       >
+        <Spotlight className="-top-40 left-0 md:-top-20 md:left-60" />
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgb(var(--accent)/0.16),transparent_70%)]"
@@ -255,16 +260,13 @@ export function Landing({ signedIn }: { signedIn: boolean }) {
               body: "Weight smoothed into a trend you can act on. Adherence against the target that was actually in force that day. Protein measured against what you lifted.",
             },
           ].map((p) => (
-            <article
-              key={p.title}
-              data-reveal
-              data-tilt
-              className="translate-y-8 rounded-2xl border border-border bg-surface/60 p-6 opacity-0"
-            >
-              <p.icon className="h-6 w-6 text-accent" />
-              <h3 className="mt-4 font-display text-lg font-semibold text-ink">{p.title}</h3>
-              <p className="mt-2 font-body text-sm leading-relaxed text-muted">{p.body}</p>
-            </article>
+            <CardSpotlight key={p.title} className="translate-y-8 opacity-0" data-reveal data-tilt>
+              <div className="p-6">
+                <p.icon className="h-6 w-6 text-accent" />
+                <h3 className="mt-4 font-display text-lg font-semibold text-ink">{p.title}</h3>
+                <p className="mt-2 font-body text-sm leading-relaxed text-muted">{p.body}</p>
+              </div>
+            </CardSpotlight>
           ))}
         </div>
       </Section>
@@ -404,6 +406,7 @@ export function Landing({ signedIn }: { signedIn: boolean }) {
 
       {/* ── cta ────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden px-4 py-28 text-center">
+        <Meteors count={14} />
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_60%_at_50%_100%,rgb(var(--accent)/0.18),transparent_70%)]"
@@ -457,12 +460,12 @@ function Section({
           {title}
         </h2>
         <span data-rule className="mt-6 block h-px w-full bg-accent/40" />
-        <p
-          data-reveal
-          className="mt-6 max-w-2xl translate-y-8 font-body text-base leading-relaxed text-muted opacity-0"
-        >
-          {lead}
-        </p>
+        {/* The lead un-blurs word by word as it scrolls in — GSAP handles the
+            structural reveals, this handles the sentence itself. */}
+        <TextGenerateEffect
+          words={lead}
+          className="mt-6 max-w-2xl font-body text-base leading-relaxed text-muted"
+        />
         <div className="mt-12">{children}</div>
       </div>
     </section>

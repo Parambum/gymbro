@@ -210,6 +210,21 @@ video {
   background: #7c3aed;
 }
 
+/* meteor shower (see components/ui/meteors.tsx) */
+@keyframes meteor {
+  0% {
+    transform: rotate(215deg) translateX(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(215deg) translateX(-700px);
+    opacity: 0;
+  }
+}
+
 /* faint cyber grid for page backdrops */
 .bg-cyber-grid {
   background-image:
