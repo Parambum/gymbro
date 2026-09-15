@@ -1,7 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CARDIO_SERIES, GRID, AXIS_INK } from "@/lib/chart-palette";
+import { chartSeries, useChartPalette } from "@/lib/chart-palette";
 
 export interface DistancePoint {
   week: string; // ISO date of week start
@@ -17,22 +17,25 @@ function weekLabel(iso: string): string {
 
 /** Weekly cardio volume in kilometres — mirrors the strength VolumeChart. */
 export function DistanceChart({ series, height = 200 }: { series: DistancePoint[]; height?: number }) {
+  const palette = useChartPalette();
+  const hues = chartSeries(palette);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={series} margin={{ top: 6, right: 8, bottom: 0, left: -10 }} barCategoryGap="28%">
-        <CartesianGrid stroke={GRID} vertical={false} />
+        <CartesianGrid stroke={palette.grid} vertical={false} />
         <XAxis
           dataKey="week"
           tickFormatter={weekLabel}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
-          axisLine={{ stroke: GRID }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          axisLine={{ stroke: palette.grid }}
           tickLine={false}
         />
         <YAxis
           // values are already kilometres — a "k" suffix would read as
           // thousands and make a 20 km week look like 20,000
           tickFormatter={(v: number) => `${v}`}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
           axisLine={false}
           tickLine={false}
           width={40}
@@ -48,7 +51,7 @@ export function DistanceChart({ series, height = 200 }: { series: DistancePoint[
             ) : null
           }
         />
-        <Bar dataKey="distanceKm" fill={CARDIO_SERIES.distance} radius={[4, 4, 0, 0]} maxBarSize={26} />
+        <Bar dataKey="distanceKm" fill={hues.cardio.distance} radius={[4, 4, 0, 0]} maxBarSize={26} />
       </BarChart>
     </ResponsiveContainer>
   );

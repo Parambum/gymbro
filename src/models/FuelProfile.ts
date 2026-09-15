@@ -7,6 +7,7 @@ import {
   SEXES,
   UNIT_SYSTEMS,
 } from "@/lib/fuel/types";
+import { EQUIPMENT_OPTIONS, EXPERIENCE_LEVELS, FITNESS_GOALS } from "@/lib/fuel/goals";
 
 /**
  * The answers onboarding collects, and the switches the module runs on.
@@ -34,6 +35,31 @@ const FuelProfileSchema = new Schema(
     /** Always positive; `goal` carries the direction. 0 for maintain. */
     rateKgPerWeek: { type: Number, default: 0, min: 0, max: 2 },
     targetWeightKg: { type: Number, default: null, min: 20, max: 400 },
+
+    /**
+     * What the user actually said they want ("tone up"), as distinct from
+     * what the calorie engine does about it ("maintain"). Both are stored:
+     * the engine goal drives the maths, and this drives the copy, the
+     * training emphasis and the expectations we set. Optional, because
+     * profiles created before the guided flow existed don't have one.
+     */
+    fitnessGoal: { type: String, enum: FITNESS_GOALS, default: null },
+
+    // ── training, for programme generation ────────────────────────────
+    experience: { type: String, enum: EXPERIENCE_LEVELS, default: null },
+    equipment: { type: String, enum: EQUIPMENT_OPTIONS, default: null },
+    daysPerWeek: { type: Number, default: null, min: 2, max: 6 },
+    sessionMinutes: { type: Number, default: 60, min: 20, max: 180 },
+
+    /**
+     * The generated training programme, stored whole.
+     *
+     * Deliberately Mixed: this is a derived document whose shape belongs to
+     * `lib/training/program.ts`, and mirroring that shape in a schema would
+     * mean two definitions to keep in step for no validation benefit — it is
+     * never accepted from a client, only ever written by the generator.
+     */
+    programme: { type: Schema.Types.Mixed, default: null },
 
     dietPref: { type: String, enum: DIET_PREFS, default: "veg" },
     macroPreset: { type: String, enum: MACRO_PRESET_SLUGS, default: "balanced" },

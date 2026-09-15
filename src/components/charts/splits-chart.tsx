@@ -1,7 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CARDIO_SERIES, GRID, AXIS_INK } from "@/lib/chart-palette";
+import { chartSeries, useChartPalette } from "@/lib/chart-palette";
 import { formatDuration, formatPace } from "@/lib/math/geo";
 
 export interface SplitPoint {
@@ -26,22 +26,25 @@ export function SplitsChart({ splits, height = 200 }: { splits: SplitPoint[]; he
   // pad the domain so the quickest km doesn't touch the ceiling
   const domainLow = Math.max(0, fastest - (slowest - fastest) * 0.35 - 10);
 
+  const palette = useChartPalette();
+  const hues = chartSeries(palette);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={splits} margin={{ top: 6, right: 8, bottom: 0, left: -4 }} barCategoryGap="22%">
-        <CartesianGrid stroke={GRID} vertical={false} />
+        <CartesianGrid stroke={palette.grid} vertical={false} />
         <XAxis
           dataKey="km"
           tickFormatter={(v: number) => `${v}`}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
-          axisLine={{ stroke: GRID }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          axisLine={{ stroke: palette.grid }}
           tickLine={false}
         />
         <YAxis
           reversed
           domain={[domainLow, slowest + 5]}
           tickFormatter={(v: number) => formatPace(v).replace(" /km", "")}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
           axisLine={false}
           tickLine={false}
           width={46}
@@ -65,7 +68,7 @@ export function SplitsChart({ splits, height = 200 }: { splits: SplitPoint[]; he
           {splits.map((s, i) => (
             <Cell
               key={i}
-              fill={s.paceSPerKm === fastest ? CARDIO_SERIES.elevation : CARDIO_SERIES.pace}
+              fill={s.paceSPerKm === fastest ? hues.cardio.elevation : hues.cardio.pace}
             />
           ))}
         </Bar>

@@ -11,6 +11,8 @@ import { targetForDate } from "@/lib/fuel/targets";
 import { trendDirection, weeklyChangeKg, withWeightTrend } from "@/lib/fuel/trend";
 import { loggingStreak } from "@/lib/fuel/log";
 import { proteinVerdict } from "@/lib/fuel/bridge";
+import { estimateAdaptiveTdee } from "@/lib/fuel/adaptive";
+import { ageOn, bmrMifflinStJeor, tdeeFrom } from "@/lib/fuel/engine";
 import { round } from "@/lib/fuel/types";
 import { addDaysIso, isValidIso, todayIso, weekStartIso } from "@/lib/date-utils";
 
@@ -164,6 +166,36 @@ export async function GET(req: Request) {
     const latestWeightKg = trend.at(-1)?.trendKg ?? null;
     const verdict = proteinVerdict(weeks, latestWeightKg);
 
+    // ── adaptive TDEE ────────────────────────────────────────────────
+    // Reads a longer window than the chart does: the estimate wants as much
+    // intake history as exists, not just what the user is currently looking at.
+    const intakeHistory = await FuelLog.aggregate<{ _id: string; kcal: number }>([
+      { $match: { userId: uid, localDate: { $gte: addDaysIso(today, -120), $lte: today } } },
+      { $group: { _id: "$localDate", kcal: { $sum: "$kcal" } } },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const formulaTdee =
+      profile && latestWeightKg
+        ? Math.round(
+            tdeeFrom(
+              bmrMifflinStJeor(
+                profile.sex,
+                latestWeightKg,
+                profile.heightCm,
+                ageOn(profile.birthDate, today),
+              ),
+              profile.activityLevel,
+            ),
+          )
+        : null;
+
+    const adaptive = estimateAdaptiveTdee(
+      intakeHistory.map((d) => ({ date: d._id, kcal: d.kcal })),
+      trend,
+      formulaTdee,
+    );
+
     return NextResponse.json({
       days,
       since,
@@ -181,6 +213,8 @@ export async function GET(req: Request) {
       weeks,
       /** §8.3 — null message means the data didn't support saying anything. */
       proteinVsProgress: verdict,
+      /** Measured metabolism. `tdee: null` means not enough data yet. */
+      adaptive,
       summary: {
         loggedDays: loggedDays.length,
         windowDays: days,

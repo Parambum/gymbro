@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AXIS_INK, FUEL_SERIES, GRID } from "@/lib/chart-palette";
+import { chartSeries, useChartPalette } from "@/lib/chart-palette";
 
 export interface AdherencePoint {
   date: string;
@@ -46,20 +46,23 @@ export function AdherenceChart({
   const targets = [...new Set(series.map((p) => p.targetKcal).filter((t): t is number => t != null))];
   const singleTarget = targets.length === 1 ? targets[0] : null;
 
+  const palette = useChartPalette();
+  const hues = chartSeries(palette);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barCategoryGap="18%">
-        <CartesianGrid stroke={GRID} vertical={false} />
+        <CartesianGrid stroke={palette.grid} vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={dayLabel}
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
-          axisLine={{ stroke: GRID }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          axisLine={{ stroke: palette.grid }}
           tickLine={false}
           minTickGap={28}
         />
         <YAxis
-          tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
+          tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
           axisLine={false}
           tickLine={false}
           width={42}
@@ -67,11 +70,11 @@ export function AdherenceChart({
         {singleTarget != null && (
           <ReferenceLine
             y={singleTarget}
-            stroke={AXIS_INK}
+            stroke={palette.axis}
             strokeDasharray="4 4"
             label={{
               value: `target ${singleTarget}`,
-              fill: AXIS_INK,
+              fill: palette.axis,
               fontSize: 9,
               fontFamily: "var(--font-mono)",
               position: "insideTopRight",
@@ -104,8 +107,8 @@ export function AdherenceChart({
               key={p.date}
               fill={
                 p.targetKcal != null && p.kcal != null && p.kcal > p.targetKcal
-                  ? FUEL_SERIES.overTarget
-                  : FUEL_SERIES.calories
+                  ? hues.fuel.overTarget
+                  : hues.fuel.calories
               }
             />
           ))}

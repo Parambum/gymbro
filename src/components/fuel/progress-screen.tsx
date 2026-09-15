@@ -21,6 +21,14 @@ interface Progress {
     direction: "rising" | "falling" | "flat";
   };
   adherence: AdherencePoint[];
+  adaptive: {
+    tdee: number | null;
+    confidence: "none" | "low" | "medium" | "high";
+    loggedDays: number;
+    formulaTdee: number | null;
+    deltaVsFormula: number | null;
+    note: string | null;
+  };
   proteinVsProgress: {
     latestProteinPerKg: number | null;
     tonnageChangePct: number | null;
@@ -229,6 +237,76 @@ export function ProgressScreen() {
           </>
         )}
       </SectionCard>
+
+      {/* ── measured metabolism ───────────────────────────────────── */}
+      {!eyesOff && (
+        <SectionCard
+          title="Your real daily burn"
+          hint="Worked out from what you ate and what the scale did — not from a formula."
+        >
+          {data.adaptive.tdee == null ? (
+            <>
+              <p className="font-display text-3xl font-bold text-faint">—</p>
+              <p className="mt-2 font-mono text-[11px] leading-relaxed text-muted">
+                {data.adaptive.note ??
+                  "Log food and weigh in regularly, and this starts reading your actual metabolism."}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-3">
+                <p className="font-display text-4xl font-bold tabular-nums text-accent">
+                  {data.adaptive.tdee}
+                </p>
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted">
+                  kcal / day
+                </span>
+                <span
+                  className={cn(
+                    "ml-auto rounded px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest",
+                    data.adaptive.confidence === "high"
+                      ? "bg-accent/15 text-accent-ink"
+                      : "bg-warn/15 text-warn",
+                  )}
+                >
+                  {data.adaptive.confidence} confidence
+                </span>
+              </div>
+
+              {data.adaptive.formulaTdee != null && (
+                <dl className="mt-4 space-y-2 font-mono text-[11px]">
+                  {[
+                    ["Formula estimate", `${data.adaptive.formulaTdee}`],
+                    ["Measured from your data", `${data.adaptive.tdee}`],
+                    [
+                      "Difference",
+                      `${(data.adaptive.deltaVsFormula ?? 0) > 0 ? "+" : ""}${data.adaptive.deltaVsFormula} / day`,
+                    ],
+                  ].map(([k, v], i) => (
+                    <div
+                      key={k}
+                      className={cn(
+                        "flex items-baseline justify-between gap-4 border-b border-border/60 pb-1.5",
+                        i === 2 && "border-none pb-0 text-accent-ink",
+                      )}
+                    >
+                      <dt className="text-muted">{k}</dt>
+                      <dd className="tabular-nums">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+
+              <p className="mt-4 font-mono text-[11px] leading-relaxed text-muted">
+                {data.adaptive.note}
+              </p>
+              <p className="mt-2 font-mono text-[10px] text-faint">
+                Based on {data.adaptive.loggedDays} logged days.
+              </p>
+            </>
+          )}
+        </SectionCard>
+      )}
 
       {/* ── §8.3 protein vs what you actually lifted ──────────────── */}
       {data.proteinVsProgress.message && (

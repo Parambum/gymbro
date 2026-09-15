@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { STRENGTH_SERIES, TREND, GRID, AXIS_INK } from "@/lib/chart-palette";
+import { chartSeries, useChartPalette } from "@/lib/chart-palette";
 import { progressBetween, type E1rmPoint } from "@/lib/math/e1rm";
 import { withTrend } from "@/lib/math/regression";
 
@@ -48,16 +48,19 @@ export function E1rmChart({
     );
   }
 
+  const palette = useChartPalette();
+  const hues = chartSeries(palette);
+
   return (
     <div>
       {/* legend: two series → always present, text in ink, color as chip */}
       <div className="mb-2 flex items-center gap-4 font-mono text-[10px] uppercase tracking-widest text-zinc-400">
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full" style={{ background: STRENGTH_SERIES.e1rm }} />
+          <span className="h-2 w-2 rounded-full" style={{ background: hues.strength.e1rm }} />
           e1RM (kg)
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-0.5 w-3" style={{ background: TREND }} />
+          <span className="h-0.5 w-3" style={{ background: palette.trend }} />
           Trend
         </span>
       </div>
@@ -65,43 +68,43 @@ export function E1rmChart({
         <ComposedChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -14 }}>
           <defs>
             <linearGradient id="e1rmFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={STRENGTH_SERIES.e1rm} stopOpacity={0.35} />
-              <stop offset="100%" stopColor={STRENGTH_SERIES.e1rm} stopOpacity={0.02} />
+              <stop offset="0%" stopColor={hues.strength.e1rm} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={hues.strength.e1rm} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke={GRID} vertical={false} />
+          <CartesianGrid stroke={palette.grid} vertical={false} />
           <XAxis
             dataKey="date"
             tickFormatter={shortDate}
-            tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
-            axisLine={{ stroke: GRID }}
+            tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
+            axisLine={{ stroke: palette.grid }}
             tickLine={false}
             minTickGap={28}
           />
           <YAxis
             domain={["dataMin - 5", "dataMax + 5"]}
-            tick={{ fill: AXIS_INK, fontSize: 10, fontFamily: "var(--font-mono)" }}
+            tick={{ fill: palette.axis, fontSize: 10, fontFamily: "var(--font-mono)" }}
             axisLine={false}
             tickLine={false}
             width={54}
           />
           <Tooltip
-            cursor={{ stroke: AXIS_INK, strokeWidth: 1, strokeDasharray: "3 3" }}
+            cursor={{ stroke: palette.axis, strokeWidth: 1, strokeDasharray: "3 3" }}
             content={<E1rmTooltip data={data} />}
           />
           <Area
             type="monotone"
             dataKey="e1rm"
-            stroke={STRENGTH_SERIES.e1rm}
+            stroke={hues.strength.e1rm}
             strokeWidth={2}
             fill="url(#e1rmFill)"
             dot={false}
-            activeDot={{ r: 4, fill: STRENGTH_SERIES.e1rm, stroke: "#0a0a14", strokeWidth: 2 }}
+            activeDot={{ r: 4, fill: hues.strength.e1rm, stroke: "#0a0a14", strokeWidth: 2 }}
           />
           <Line
             type="linear"
             dataKey="trend"
-            stroke={TREND}
+            stroke={palette.trend}
             strokeWidth={1.5}
             strokeDasharray="6 4"
             dot={false}

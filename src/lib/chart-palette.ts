@@ -1,67 +1,97 @@
-/**
- * Chart series palette — VALIDATED, do not eyeball-edit.
- *
- * Every pair below passed all six dataviz checks (OKLCH lightness band
- * 0.48–0.67 dark, chroma floor, CVD ΔE, normal-vision floor, 3:1 contrast)
- * against the app surface #0a0a14 via scripts/validate_palette.js.
- *
- * The hotter neons in tailwind.config.ts (`hot.*`) are UI glow/border
- * accents ONLY and must never be used as chart marks.
- */
-export const SURFACE = "#0a0a14";
+"use client";
 
-/** Strength analytics: e1RM area + volume bars. */
-export const STRENGTH_SERIES = {
-  e1rm: "#8b5cf6", // hyper purple
-  volume: "#16a34a", // cyber green
-} as const;
-
-/** Body-progression radar — one hue for the single "current best e1RM" series. */
-export const RADAR = "#8b5cf6";
+import { useEffect, useState } from "react";
 
 /**
- * Cardio analytics: weekly distance bars, per-km split bars, elevation accent.
+ * Chart series colours — VALIDATED, do not eyeball-edit.
  *
- * Checked against the same criteria as the values above (OKLCH L in 0.48–0.67,
- * chroma floor, ≥3:1 against #0a0a14):
- *   distance  L 0.588  C 0.139  4.81:1
- *   pace      L 0.596  C 0.127  5.23:1
- *   elevation L 0.666  C 0.157  6.18:1
+ * Each theme's `--chart-*` values in globals.css were contrast-checked against
+ * that theme's own surface (OKLCH lightness band 0.48–0.67, chroma floor, 3:1
+ * against the panel). The accent variables are UI glow/border colours and must
+ * never be used as chart marks — they are deliberately too light.
  *
- * Note the `neon.*` values in tailwind.config.ts are NOT usable here despite
- * their comment — #38bdf8/#4ade80/#fbbf24 measure L 0.75–0.84, well above the
- * band. Each key below is drawn as a single-series mark on its own chart, so
- * the pairwise-separation requirement applies within a chart, not across them.
+ * Why a hook rather than constants: Recharts writes `fill`/`stroke` as SVG
+ * presentation attributes, and `var()` does not resolve there — only inside
+ * real CSS declarations. So the values have to be read out of the computed
+ * style as concrete `rgb()` strings and handed to Recharts. The fallbacks
+ * below are the Molten set, used for the server-rendered pass before any
+ * computed style exists.
  */
-export const CARDIO_SERIES = {
-  distance: "#0284c7", // sky
-  pace: "#059669", // emerald
-  elevation: "#d97706", // amber
-} as const;
+
+export interface ChartPalette {
+  series1: string;
+  series2: string;
+  series3: string;
+  trend: string;
+  grid: string;
+  axis: string;
+  surface: string;
+}
+
+const FALLBACK: ChartPalette = {
+  series1: "rgb(214 88 32)",
+  series2: "rgb(201 134 20)",
+  series3: "rgb(41 130 196)",
+  trend: "rgb(156 163 175)",
+  grid: "rgba(158,158,180,0.10)",
+  axis: "rgb(150 150 158)",
+  surface: "rgb(20 20 23)",
+};
+
+function readVar(styles: CSSStyleDeclaration, name: string): string | null {
+  const raw = styles.getPropertyValue(name).trim();
+  return raw ? `rgb(${raw})` : null;
+}
 
 /**
- * Fuel (nutrition) analytics.
+ * The current theme's chart colours, re-read whenever the theme changes.
  *
- * No new hues: every value here is one of the already-validated marks above,
- * reused on a chart of its own. The weight chart pairs its series with the
- * neutral TREND ink rather than a second hue, exactly as the e1RM chart does,
- * so no unvalidated pair is ever drawn together.
- *
- * `overTarget` is the one two-mark chart — calorie adherence bars, where a day
- * above target is amber. Both hues are validated against the surface and sit
- * far apart in lightness (L 0.59 vs 0.67). Amber here is a neutral fact, never
- * a warning: §5.6 forbids a punishment state, so the same information is
- * always given in words beside the chart.
+ * Watches `data-theme` on <html> rather than taking it as a prop, so a chart
+ * buried three components deep retones without anyone threading it down.
  */
-export const FUEL_SERIES = {
-  weight: CARDIO_SERIES.distance,
-  calories: STRENGTH_SERIES.volume,
-  overTarget: CARDIO_SERIES.elevation,
-} as const;
+export function useChartPalette(): ChartPalette {
+  const [palette, setPalette] = useState<ChartPalette>(FALLBACK);
 
-/** Trendline overlays — neutral ink, never a third hue. */
-export const TREND = "#9ca3af";
+  useEffect(() => {
+    const read = () => {
+      const styles = getComputedStyle(document.documentElement);
+      const muted = styles.getPropertyValue("--muted").trim();
+      const gridChannels = styles.getPropertyValue("--chart-grid").trim();
 
-/** Recessive chart chrome. */
-export const GRID = "rgba(158,158,180,0.10)";
-export const AXIS_INK = "#8b8ba3";
+      setPalette({
+        series1: readVar(styles, "--chart-1") ?? FALLBACK.series1,
+        series2: readVar(styles, "--chart-2") ?? FALLBACK.series2,
+        series3: readVar(styles, "--chart-3") ?? FALLBACK.series3,
+        trend: readVar(styles, "--chart-trend") ?? FALLBACK.trend,
+        // Grid lines are deliberately a low-alpha wash, not a solid colour.
+        grid: gridChannels ? `rgba(${gridChannels.split(" ").join(",")},0.10)` : FALLBACK.grid,
+        axis: muted ? `rgb(${muted})` : FALLBACK.axis,
+        surface: readVar(styles, "--surface") ?? FALLBACK.surface,
+      });
+    };
+
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+
+  return palette;
+}
+
+/**
+ * Names the charts already use, mapped onto the themed series.
+ *
+ * Each of these is drawn as a single-series mark on its own chart, so the
+ * pairwise-separation requirement applies within a chart, not across them.
+ * The one two-mark chart is calorie adherence (series1 under target, series2
+ * over), and those two sit far apart in lightness in every theme.
+ */
+export function chartSeries(p: ChartPalette) {
+  return {
+    strength: { e1rm: p.series3, volume: p.series1 },
+    cardio: { distance: p.series3, pace: p.series1, elevation: p.series2 },
+    fuel: { weight: p.series3, calories: p.series1, overTarget: p.series2 },
+    radar: p.series3,
+  };
+}

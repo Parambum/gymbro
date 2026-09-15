@@ -2,12 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ── Themes ────────────────────────────────────────────────────────
+   Every colour resolves through a custom property, so the whole app —
+   including components written long before themes existed — retones by
+   swapping one attribute on <html>.
+
+   Channels, not hex. Tailwind composes these as
+   `rgb(var(--accent) / <alpha-value>)`, which is what keeps `bg-accent/10`
+   and every other translucent surface working. A hex value here would
+   break all of them silently.
+
+   Chart series are theme variables too, but their values are NOT free
+   choices: each one was contrast-checked against that theme's surface, the
+   same bar `lib/chart-palette.ts` sets. Don't eyeball-edit them.          */
+
+:root,
+[data-theme="molten"] {
   color-scheme: dark;
-  /* Helvetica everywhere. Real Helvetica/Neue where installed (macOS, iOS);
-     Arial — its metric twin — as the near-identical fallback elsewhere. */
-  --font-display: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-mono: "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --bg: 11 11 13; /* #0B0B0D graphite */
+  --surface: 20 20 23; /* #141417 */
+  --raised: 28 28 32; /* #1C1C20 */
+  --border: 42 42 48; /* #2A2A30 */
+
+  --ink: 242 242 240; /* #F2F2F0 warm white */
+  --muted: 150 150 158;
+  --faint: 100 100 108;
+
+  --accent: 255 90 31; /* #FF5A1F ember */
+  --accent-ink: 255 138 92; /* legible ember for text/marks */
+  --accent-2: 255 176 32; /* #FFB020 amber */
+  --info: 90 176 255;
+  --warn: 255 176 32;
+  --danger: 255 91 91;
+
+  --chart-1: 214 88 32; /* ember, validated on #141417 */
+  --chart-2: 201 134 20; /* amber */
+  --chart-3: 41 130 196; /* steel blue */
+  --chart-trend: 156 163 175; /* neutral ink overlay */
+  --chart-grid: 255 255 255;
+}
+
+[data-theme="court"] {
+  color-scheme: dark;
+
+  --bg: 10 15 26; /* #0A0F1A navy */
+  --surface: 18 26 42; /* #121A2A */
+  --raised: 26 36 56;
+  --border: 40 54 80;
+
+  --ink: 234 240 255; /* #EAF0FF */
+  --muted: 148 163 190;
+  --faint: 100 116 145;
+
+  --accent: 198 255 61; /* #C6FF3D lime */
+  --accent-ink: 198 255 61;
+  --accent-2: 55 211 255; /* #37D3FF cyan */
+  --info: 55 211 255;
+  --warn: 250 204 21;
+  --danger: 255 107 107;
+
+  --chart-1: 132 176 27; /* lime, validated on #121A2A */
+  --chart-2: 14 165 202; /* cyan */
+  --chart-3: 201 134 20; /* amber */
+  --chart-trend: 148 163 190;
+  --chart-grid: 255 255 255;
+}
+
+[data-theme="classic"] {
+  color-scheme: dark;
+
+  --bg: 5 5 10; /* #05050A void */
+  --surface: 10 10 20; /* #0A0A14 abyss */
+  --raised: 14 14 28; /* #0E0E1C panel */
+  --border: 30 30 51; /* #1E1E33 edge */
+
+  --ink: 212 212 220;
+  --muted: 161 161 170;
+  --faint: 113 113 122;
+
+  --accent: 34 255 136; /* #22FF88 hot green */
+  --accent-ink: 74 222 128; /* #4ADE80 chart-safe green */
+  --accent-2: 124 58 237; /* #7C3AED hot purple */
+  --info: 56 189 248;
+  --warn: 251 191 36;
+  --danger: 255 45 85;
+
+  --chart-1: 22 163 74; /* the original validated pair */
+  --chart-2: 139 92 246;
+  --chart-3: 2 132 199;
+  --chart-trend: 156 163 175;
+  --chart-grid: 158 158 180;
 }
 
 html {
@@ -16,12 +101,22 @@ html {
 }
 
 body {
-  background-color: #05050a;
-  color: #d4d4dc;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--ink));
   overflow-x: hidden;
   overscroll-behavior-x: none;
   /* iOS Safari inflates font sizes on rotate without this */
   -webkit-text-size-adjust: 100%;
+}
+
+/* Retheming mid-session shouldn't look like a page flash, but it also
+   shouldn't animate on first paint — only once the picker has been used. */
+html[data-theme-animating] body,
+html[data-theme-animating] body * {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease;
 }
 
 /* clears the iPhone home indicator beneath the fixed tab bar */

@@ -2,16 +2,22 @@ import { cn } from "@/lib/utils";
 
 /**
  * GymBro mark — a broad-shouldered figure with a raised arm hoisting a
- * protein shaker. Body strokes use currentColor; the shaker's liquid
- * window takes `accent` so the logo picks up the app's neon.
+ * protein shaker. Body strokes use currentColor; the shaker's liquid window
+ * follows the theme accent.
+ *
+ * Left undefined, the accent is applied as a CLASS rather than a `fill`
+ * attribute, because SVG presentation attributes don't resolve `var()` — a
+ * themed colour passed here as a string would silently render black. Callers
+ * may still pass a literal colour.
  */
 export function GymBroMark({
   className,
-  accent = "#22ff88",
+  accent,
 }: {
   className?: string;
   accent?: string;
 }) {
+  const accentProps = accent ? { fill: accent } : { className: "fill-accent" };
   return (
     <svg viewBox="0 0 48 48" fill="none" className={className} aria-hidden>
       {/* head */}
@@ -38,7 +44,7 @@ export function GymBroMark({
       {/* shaker body + lid + liquid window */}
       <rect x="30" y="4.5" width="9.5" height="11.5" rx="2.6" fill="currentColor" />
       <rect x="30.8" y="1.5" width="8" height="3.2" rx="1.3" fill="currentColor" />
-      <rect x="32" y="9" width="5.6" height="5.4" rx="1.2" fill={accent} />
+      <rect x="32" y="9" width="5.6" height="5.4" rx="1.2" {...accentProps} />
     </svg>
   );
 }
@@ -47,7 +53,7 @@ export function GymBroMark({
 export function GymBroLogo({
   className,
   markClassName,
-  accent = "#22ff88",
+  accent,
 }: {
   className?: string;
   markClassName?: string;
