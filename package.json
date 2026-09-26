@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "fuel:import": "node scripts/import-usda.mjs",
     "fuel:import:india": "node scripts/import-off-india.mjs",
-    "fuel:seed": "node scripts/seed-fuel.mjs"
+    "fuel:seed": "node scripts/seed-fuel.mjs",
+    "fuel:seed:prod": "node --env-file=.env.production.local scripts/seed-fuel.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.119.0",

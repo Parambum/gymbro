@@ -10,10 +10,22 @@
  * `createIndex` and the upserts are both idempotent.
  *
  * It never touches a user's own rows: only global foods (`ownerUserId: null`)
- * sourced from USDA are written, and `--prune` only ever removes those.
+ * from a seeded source are written, and `--prune` only ever removes those.
  * Custom foods, recipes and logs are out of its reach by construction.
  *
- * The food database ships in the repo; `npm run fuel:import` rebuilds it.
+ * To seed production without the connection string passing through a shell
+ * history, a chat window or a --uri flag, pull it from Vercel and let Node
+ * read the file directly:
+ *
+ *   npx vercel login
+ *   npx vercel link --project gymbro
+ *   npx vercel env pull .env.production.local --environment=production
+ *   npm run fuel:seed:prod
+ *
+ * `.env.production.local` is already gitignored by the `.env*.local` rule.
+ *
+ * The food database ships in the repo; `npm run fuel:import` rebuilds the USDA
+ * half and `npm run fuel:import:india` the Indian half.
  */
 import { readFileSync, existsSync } from "node:fs";
 import mongoose from "mongoose";
