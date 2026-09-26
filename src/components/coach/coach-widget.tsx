@@ -117,7 +117,10 @@ export function CoachWidget({ signedIn }: { signedIn: boolean }) {
           className={cn(
             "fixed right-4 z-[60] flex w-[min(23rem,calc(100vw-2rem))] flex-col overflow-hidden",
             "rounded-2xl border border-edge bg-void/95 shadow-2xl backdrop-blur-md",
-            "h-[min(32rem,calc(100vh-9rem))]",
+            // dvh, not vh: with the mobile URL bar showing, 100vh is the
+            // *larger* viewport, so the panel is sized taller than the screen
+            // and its composer scrolls out of reach.
+            "h-[min(32rem,calc(100dvh-9rem))]",
             signedIn ? "bottom-[calc(8rem+env(safe-area-inset-bottom))] md:bottom-24" : "bottom-24",
           )}
         >

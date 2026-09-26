@@ -142,6 +142,23 @@ video {
   }
 }
 
+/* iOS Safari zooms the whole page when a field smaller than 16px takes focus,
+   and because the viewport is declared `viewportFit: cover` with no
+   maximum-scale, it does not zoom back out again — the user has to pinch. The
+   design uses 12-14px fields, which is fine under a mouse and, under a thumb,
+   is both hard to read and disruptive on every single tap into a field.
+
+   Scoped to coarse pointers so the desktop type scale is untouched. Checkboxes,
+   radios and ranges are excluded because their size comes from the control, not
+   the text, and forcing 16px there visibly enlarges them. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* ── Leaflet, themed ───────────────────────────────────────────────
    Leaflet ships light-mode chrome: white zoom buttons and a white
    attribution strip, both of which glare against the app surface. */

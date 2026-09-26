@@ -45,7 +45,11 @@ export function FuelNav() {
               href={tab.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-lg font-mono text-[10px] uppercase tracking-widest transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green",
+                // Stacked below sm, inline above. Five tabs of icon-then-label
+                // need about 76px each; a 360px phone gives 61px, so the row
+                // was overflowing its own container. Stacking puts the label on
+                // its own line, which fits, and matches the bottom tab bar.
+                "flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green sm:min-h-[40px] sm:flex-row sm:gap-1.5 sm:tracking-widest",
                 active
                   ? "bg-hot-green/10 text-neon-green"
                   : "text-zinc-500 hover:text-zinc-200",
