@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Plus, Route, Trophy } from "lucide-react";
 import { BentoGrid, BentoGridItem } from "@/components/ui/bento-grid";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
@@ -37,20 +38,28 @@ export default function CardioPage() {
   const [feed, setFeed] = useState<FeedActivity[] | null>(null);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [modalOpen, setModalOpen] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<"auth" | "db" | null>(null);
 
   const loadStats = useCallback(() => {
     fetch(`/api/activities/stats?today=${todayIso()}`)
-      .then((r) => r.json())
-      .then((j) => (j.error ? setFailed(true) : setStats(j)))
-      .catch(() => setFailed(true));
+      .then(async (r) => {
+        if (r.status === 401) return setFailed("auth");
+        const j = await r.json();
+        if (j.error) return setFailed("db");
+        setStats(j);
+      })
+      .catch(() => setFailed("db"));
   }, []);
 
   const loadFeed = useCallback(() => {
     fetch(`/api/activities?limit=50&type=${filter}`)
-      .then((r) => r.json())
-      .then((j) => (j.error ? setFailed(true) : setFeed(j.activities)))
-      .catch(() => setFailed(true));
+      .then(async (r) => {
+        if (r.status === 401) return setFailed("auth");
+        const j = await r.json();
+        if (j.error) return setFailed("db");
+        setFeed(j.activities);
+      })
+      .catch(() => setFailed("db"));
   }, [filter]);
 
   useEffect(() => loadStats(), [loadStats]);
@@ -71,7 +80,17 @@ export default function CardioPage() {
   if (failed) {
     return (
       <CenteredNote className="text-neon-crimson">
-        Could not reach the database — verify the MONGODB_URI environment variable, then refresh.
+        {failed === "auth" ? (
+          <>
+            Your session has expired —{" "}
+            <Link href="/login" className="underline">
+              sign in again
+            </Link>
+            .
+          </>
+        ) : (
+          "Could not reach the database. Open /api/health/db for the reason, then refresh."
+        )}
       </CenteredNote>
     );
   }

@@ -33,20 +33,37 @@ interface Overview {
 
 export default function DashboardPage() {
   const [data, setData] = useState<Overview | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<"auth" | "db" | null>(null);
 
   const load = () => {
     fetch(`/api/analytics/overview?today=${todayIso()}`)
-      .then((r) => r.json())
-      .then((json) => (json.error ? setFailed(true) : setData(json)))
-      .catch(() => setFailed(true));
+      .then(async (r) => {
+        // An expired session and an unreachable database used to render the
+        // same "check MONGODB_URI" line, which sends you off debugging Mongo
+        // when all you needed was to sign in again.
+        if (r.status === 401) return setFailed("auth");
+        const json = await r.json();
+        if (json.error) return setFailed("db");
+        setData(json);
+      })
+      .catch(() => setFailed("db"));
   };
   useEffect(load, []);
 
   if (failed) {
     return (
       <CenteredNote className="text-neon-crimson">
-        Could not reach the database — verify the MONGODB_URI environment variable, then refresh.
+        {failed === "auth" ? (
+          <>
+            Your session has expired —{" "}
+            <Link href="/login" className="underline">
+              sign in again
+            </Link>
+            .
+          </>
+        ) : (
+          "Could not reach the database. Open /api/health/db for the reason, then refresh."
+        )}
       </CenteredNote>
     );
   }
