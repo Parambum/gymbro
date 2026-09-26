@@ -21,6 +21,13 @@ export const dynamic = "force-dynamic";
 function classify(err: unknown): { reason: string; hint: string } {
   const msg = err instanceof Error ? err.message : String(err);
 
+  if (/cannot be specified with no value/i.test(msg))
+    return {
+      reason: "uri-truncated",
+      hint:
+        "MONGODB_URI carries an option with no value, which is what a connection string " +
+        "pasted from a shortened or ellipsised copy looks like. Re-copy it in full from Atlas.",
+    };
   if (/does not support directConnection/i.test(msg))
     return {
       reason: "direct-connection-with-srv",
