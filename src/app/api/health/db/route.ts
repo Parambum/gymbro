@@ -47,6 +47,14 @@ function classify(err: unknown): { reason: string; hint: string } {
       reason: "auth-failed",
       hint: "The cluster is reachable but rejected the username or password in MONGODB_URI.",
     };
+  if (/ENOTFOUND|querySrv/i.test(msg) && (process.env.MONGODB_URI ?? "").split("@").length > 2)
+    return {
+      reason: "unescaped-character-in-password",
+      hint:
+        "The password in MONGODB_URI contains an @ that is not percent-encoded. The driver " +
+        "splits credentials from host at the first @, so the rest of the password was read as " +
+        "the hostname. Write @ as %40, or set a password with no reserved characters.",
+    };
   if (/Invalid scheme|Invalid connection string|URI malformed|querySrv|ENOTFOUND|EAI_AGAIN/i.test(msg))
     return { reason: "uri-malformed", hint: "MONGODB_URI is not a resolvable connection string." };
   if (/cannot have port number|multiple service names|srvMaxHosts|loadBalanced/i.test(msg))
@@ -86,6 +94,9 @@ function shape() {
     // reads exactly like a wrong password, so name it explicitly.
     hasPlaceholder: /<[^>]+>/.test(uri),
     hasCredentials: uri.includes("@"),
+    // Exactly one @ separates credentials from host. More than one means a
+    // reserved character went into the password without being encoded.
+    atCount: uri.split("@").length - 1,
     databaseInUri: database || null,
     options,
     hostCount: hostPart ? hostPart.split(",").length : 0,
