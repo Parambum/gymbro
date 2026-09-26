@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "fuel:import": "node scripts/import-usda.mjs",
+    "fuel:import:india": "node scripts/import-off-india.mjs",
     "fuel:seed": "node scripts/seed-fuel.mjs"
   },
   "dependencies": {

@@ -19,7 +19,16 @@ import { readFileSync, existsSync } from "node:fs";
 import mongoose from "mongoose";
 import { portionsFor } from "./fuel/portion-sets.mjs";
 
-const FOODS_JSON = "src/lib/data/fuel-foods.json";
+/**
+ * Two manifests, seeded as one collection. USDA carries composition — what a
+ * food is made of — and Open Food Facts carries the Indian shelf, which is
+ * what someone actually reaches for at breakfast. Neither replaces the other,
+ * and each is rebuilt by its own importer.
+ */
+const FOOD_MANIFESTS = [
+  { path: "src/lib/data/fuel-foods.json", label: "USDA", rebuild: "npm run fuel:import" },
+  { path: "src/lib/data/fuel-foods-india.json", label: "India (OFF)", rebuild: "npm run fuel:import:india" },
+];
 const args = process.argv.slice(2);
 const prune = args.includes("--prune");
 const indexesOnly = args.includes("--indexes");
@@ -117,19 +126,28 @@ async function main() {
   if (indexesOnly) return;
 
   // ── food database ──────────────────────────────────────────────────
-  if (!existsSync(FOODS_JSON)) {
-    console.error(
-      `\n${FOODS_JSON} not found.\n` +
-        "Run `npm run fuel:import` first — it builds the database from the USDA\n" +
-        "bulk exports. Nothing in the food database is written by hand.",
-    );
-    process.exitCode = 1;
-    return;
+  const foods = [];
+  for (const m of FOOD_MANIFESTS) {
+    if (!existsSync(m.path)) {
+      // A missing India file is survivable — the USDA database alone is a
+      // working tracker. A missing USDA file is not.
+      console.error(`  ! ${m.path} not found — run \`${m.rebuild}\` to build it`);
+      continue;
+    }
+    const parsed = JSON.parse(readFileSync(m.path, "utf8"));
+    if (!Array.isArray(parsed.foods) || parsed.foods.length === 0) {
+      console.error(`  ! ${m.path} contains no foods`);
+      continue;
+    }
+    console.log(`manifest: ${m.label} — ${parsed.foods.length} foods`);
+    foods.push(...parsed.foods);
   }
 
-  const { foods } = JSON.parse(readFileSync(FOODS_JSON, "utf8"));
-  if (!Array.isArray(foods) || foods.length === 0) {
-    console.error(`${FOODS_JSON} contains no foods — nothing to seed.`);
+  if (foods.length === 0) {
+    console.error(
+      "\nNo food manifest found. Nothing in the food database is written by\n" +
+        "hand — run the importers to build it.",
+    );
     process.exitCode = 1;
     return;
   }
@@ -158,20 +176,28 @@ async function main() {
 
   const foodOps = foods.map((f) => ({
     updateOne: {
-      filter: { source: "usda", sourceRef: f.sourceRef },
+      // Identity is (source, sourceRef). A USDA fdcId and an OFF barcode can
+      // in principle be the same digits, so the source has to be in the key.
+      filter: { source: f.source ?? "usda", sourceRef: f.sourceRef },
       update: {
         $set: {
           name: f.name,
-          brand: null,
+          brand: f.brand ?? null,
           isVerified: Boolean(f.isVerified),
           per100g: f.per100g,
           vegFlag: f.vegFlag,
           ownerUserId: null,
           aliases: f.aliases ?? [],
-          searchText: [f.name, ...(f.aliases ?? [])].join(" ").toLowerCase(),
+          // The brand belongs in the haystack: people search "amul dahi",
+          // and the brand is half of what they typed.
+          searchText: [f.name, f.brand, ...(f.aliases ?? [])]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase(),
+          barcode: f.barcode ?? null,
           updatedAt: now,
         },
-        $setOnInsert: { popularity: 0, barcode: null, createdAt: now },
+        $setOnInsert: { popularity: 0, createdAt: now },
       },
       upsert: true,
     },
@@ -183,16 +209,20 @@ async function main() {
   );
 
   // ── portions (need the food _ids, so this is a second pass) ─────────
-  const refs = foods.map((f) => f.sourceRef);
+  const sources = [...new Set(foods.map((f) => f.source ?? "usda"))];
+  const identity = (source, ref) => `${source}\u0000${ref}`;
   const saved = await db
     .collection("fuelfoods")
-    .find({ source: "usda", sourceRef: { $in: refs } }, { projection: { sourceRef: 1 } })
+    .find(
+      { ownerUserId: null, source: { $in: sources } },
+      { projection: { source: 1, sourceRef: 1 } },
+    )
     .toArray();
-  const idByRef = new Map(saved.map((d) => [d.sourceRef, d._id]));
+  const idByRef = new Map(saved.map((d) => [identity(d.source, d.sourceRef), d._id]));
 
   const portionOps = [];
   for (const f of foods) {
-    const foodId = idByRef.get(f.sourceRef);
+    const foodId = idByRef.get(identity(f.source ?? "usda", f.sourceRef));
     if (!foodId) continue;
     // `portionSet` is a name; expand it here so the gram conventions have one
     // home. Older manifests inlined `portions`, so both are accepted.
@@ -227,13 +257,19 @@ async function main() {
 
   // ── prune foods that left the manifest ─────────────────────────────
   if (prune) {
-    const stale = await db
-      .collection("fuelfoods")
-      .find(
-        { source: "usda", ownerUserId: null, sourceRef: { $nin: refs } },
-        { projection: { _id: 1 } },
-      )
-      .toArray();
+    // Only prune sources this run actually seeded. Pruning a source whose
+    // manifest was missing would delete a working half of the database
+    // because its file happened not to be built yet.
+    const keep = new Set(foods.map((f) => identity(f.source ?? "usda", f.sourceRef)));
+    const stale = (
+      await db
+        .collection("fuelfoods")
+        .find(
+          { source: { $in: sources }, ownerUserId: null },
+          { projection: { _id: 1, source: 1, sourceRef: 1 } },
+        )
+        .toArray()
+    ).filter((d) => !keep.has(identity(d.source, d.sourceRef)));
     if (stale.length > 0) {
       const ids = stale.map((d) => d._id);
       await db.collection("fuelportions").deleteMany({ foodId: { $in: ids } });
