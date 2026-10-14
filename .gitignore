@@ -34,3 +34,22 @@ yarn-error.log*
 /backend/.venv/
 __pycache__/
 *.pyc
+
+# native build artefacts
+gymbro-android/build/
+gymbro-android/app/build/
+gymbro-android/.gradle/
+gymbro-android/local.properties
+gymbro-mobile/node_modules/
+gymbro-mobile/.expo/
+android/
+ios/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# local mongo scratch
+.mongo-data/
+hs_err_pid*.log
+replay_pid*.log
