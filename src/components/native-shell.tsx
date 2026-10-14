@@ -60,6 +60,22 @@ export function NativeShell() {
     };
   }, []);
 
+  /**
+   * Register the service worker, in the browser only.
+   *
+   * Chrome refuses to offer "Install" without one, which is what reduced the
+   * home-screen option to a browser shortcut. Inside the native app it would
+   * be redundant — Capacitor already owns the shell — so it is skipped there.
+   */
+  useEffect(() => {
+    if (isNative()) return;
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    // After load, so registration never competes with the first paint.
+    const register = () => void navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if (document.readyState === "complete") register();
+    else window.addEventListener("load", register, { once: true });
+  }, []);
+
   // Back button: re-registered per route so the root check stays accurate.
   useEffect(() => {
     if (!isNative()) return;

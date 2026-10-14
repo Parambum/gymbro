@@ -43,6 +43,22 @@ export const metadata: Metadata = {
   title: "GymBro — Train. Eat. Track.",
   description:
     "A serious tool for serious progress. Click-to-log strength training on a 3D anatomy model, nutrition that adapts to your real metabolism, and one plan for both.",
+  applicationName: "GymBro",
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  // iOS has no manifest support worth the name; these are what make an
+  // added-to-home-screen GymBro open without Safari's chrome around it.
+  appleWebApp: {
+    capable: true,
+    title: "GymBro",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
