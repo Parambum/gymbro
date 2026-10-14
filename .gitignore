@@ -36,14 +36,11 @@ __pycache__/
 *.pyc
 
 # native build artefacts
-gymbro-android/build/
-gymbro-android/app/build/
-gymbro-android/.gradle/
-gymbro-android/local.properties
-gymbro-mobile/node_modules/
-gymbro-mobile/.expo/
-android/
-ios/
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/public/
 *.apk
 *.aab
 *.keystore

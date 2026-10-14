@@ -1,9 +1,0 @@
-<resources>
-    <!-- Framework parent keeps this free of any com.google.android.material dependency. -->
-    <style name="Theme.GymBro" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/ink950</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
-    </style>
-</resources>

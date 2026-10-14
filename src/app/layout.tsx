@@ -4,6 +4,7 @@ import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { auth } from "@/auth";
 import { Nav } from "@/components/nav";
 import { CoachWidget } from "@/components/coach/coach-widget";
+import { NativeShell } from "@/components/native-shell";
 import { isFuelEnabled } from "@/lib/fuel/flag";
 import { DEFAULT_THEME, THEME_COOKIE, isTheme } from "@/lib/theme";
 import "./globals.css";
@@ -68,6 +69,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       data-theme={theme}
     >
       <body className="font-body antialiased">
+        {/* Splash dismissal, system bars and the Android back button.
+            Renders nothing, and does nothing at all in a browser. */}
+        <NativeShell />
         <div className="scanline-overlay" aria-hidden />
         <Nav user={session?.user ?? null} fuelEnabled={isFuelEnabled()} />
         {/* clear the fixed mobile tab bar (56px + safe area); desktop has none */}

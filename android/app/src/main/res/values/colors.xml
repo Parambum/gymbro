@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The molten theme's tokens, copied from src/app/globals.css.
+
+  The launch screen is drawn by Android before a single line of the web app has
+  run, so it is the one surface that cannot read the CSS variables. These four
+  values are the seam between native and web, and they are why the app opens on
+  its own background instead of flashing white into a dark page.
+
+  If the default theme in globals.css changes, change these with it.
+-->
+<resources>
+    <color name="brandBackground">#0B0B0D</color>
+    <color name="colorPrimary">#0B0B0D</color>
+    <color name="colorPrimaryDark">#0B0B0D</color>
+    <color name="colorAccent">#FF5A1F</color>
+</resources>

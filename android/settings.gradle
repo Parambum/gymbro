@@ -1,0 +1,20 @@
+// Let Gradle fetch whatever JDK a module asks for.
+//
+// The Capacitor plugins do not agree: local-notifications compiles against
+// Java 21 while the app and the rest target 17, and Gradle treats a toolchain
+// request as a hard requirement — it fails the build outright rather than
+// falling back to the JDK it is already running on. Without this, every
+// developer needs every version any plugin happens to name, and adding a
+// plugin can break the build on everyone else's machine.
+//
+// Must stay the first statement in this file; Gradle rejects a plugins block
+// that follows anything else.
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
+include ':app'
+include ':capacitor-cordova-android-plugins'
+project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+
+apply from: 'capacitor.settings.gradle'

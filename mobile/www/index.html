@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>GymBro</title>
+    <!--
+      The only screen that ships inside the APK.
+
+      Everything else in this app is the deployed web application, which is how
+      the app and the site stay identical. The cost of that is a web view with
+      nothing to show when the phone has no signal, and a blank white page is a
+      worse answer than saying so. This is themed to match the app it stands in
+      for, so the seam is not the first thing a user sees.
+    -->
+    <style>
+      :root {
+        --bg: #0b0b0d;
+        --surface: #141417;
+        --border: #2a2a30;
+        --ink: #f2f2f0;
+        --muted: #96969e;
+        --accent: #ff5a1f;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
+          calc(16px + env(safe-area-inset-left));
+        text-align: center;
+        -webkit-font-smoothing: antialiased;
+      }
+      .card { max-width: 22rem; width: 100%; }
+      .mark {
+        width: 3rem; height: 3rem; margin: 0 auto 1.75rem;
+        border: 2px solid var(--accent); border-radius: 0.75rem;
+        display: grid; place-items: center;
+        font-weight: 700; font-size: 1.1rem; color: var(--accent);
+        letter-spacing: 0.05em;
+      }
+      h1 {
+        font-size: 1.05rem; font-weight: 700; letter-spacing: 0.22em;
+        text-transform: uppercase; margin-bottom: 0.85rem;
+      }
+      p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.75rem; }
+      button {
+        width: 100%; min-height: 48px; padding: 0 1.5rem;
+        background: transparent; color: var(--accent);
+        border: 1px solid var(--accent); border-radius: 0.75rem;
+        font-family: inherit; font-size: 0.78rem; font-weight: 600;
+        letter-spacing: 0.18em; text-transform: uppercase;
+        cursor: pointer; -webkit-tap-highlight-color: transparent;
+        transition: background-color 160ms ease;
+      }
+      button:active { background: rgba(255, 90, 31, 0.12); }
+      .status {
+        margin-top: 1.25rem; font-size: 0.7rem; letter-spacing: 0.15em;
+        text-transform: uppercase; color: #64646c; min-height: 1rem;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .card { animation: rise 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+        @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="mark">GB</div>
+      <h1>No connection</h1>
+      <p>
+        GymBro needs a connection to reach your logs. Nothing has been lost —
+        this is the screen failing, not your data.
+      </p>
+      <button id="retry" type="button">Try again</button>
+      <div class="status" id="status"></div>
+    </main>
+
+    <script>
+      const RETURN_TO = "https://gymbro-dun.vercel.app";
+      const status = document.getElementById("status");
+      const retry = document.getElementById("retry");
+
+      async function attempt() {
+        status.textContent = "Checking…";
+        try {
+          // A real request, not navigator.onLine: a phone can hold a wifi
+          // association that routes nowhere, and onLine reports true for it.
+          await fetch(RETURN_TO + "/api/health/db", { method: "HEAD", cache: "no-store" });
+          location.replace(RETURN_TO);
+        } catch {
+          status.textContent = "Still offline";
+        }
+      }
+
+      retry.addEventListener("click", attempt);
+      // Reconnecting should not require noticing this screen and tapping.
+      window.addEventListener("online", attempt);
+    </script>
+  </body>
+</html>

@@ -18,6 +18,16 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.119.0",
+    "@capacitor-mlkit/barcode-scanning": "^8.2.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "@gsap/react": "^2.1.2",
     "@react-three/drei": "^10.0.1",
     "@react-three/fiber": "^9.0.4",
@@ -43,6 +53,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^22.10.7",
