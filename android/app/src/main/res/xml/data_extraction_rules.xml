@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Exclude everything from backup and from device-to-device transfer.
+
+  The web view's data directory holds the session cookie. Letting it ride along
+  in a cloud backup, or onto a new phone during setup, means a signed-in
+  session can be restored somewhere the member never signed in — and on a
+  rooted or debug-enabled device, `adb backup` is how that session gets lifted
+  off the phone entirely.
+
+  Signing in again costs one screen. Losing the account does not.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

@@ -127,6 +127,22 @@ export function AuthScreen({ mode, googleEnabled }: { mode: Mode; googleEnabled:
           >
             {busy ? "…" : isSignup ? "Create account" : "Log in"}
           </button>
+
+          {/* Consent is recorded at the moment of the act it consents to.
+              A link buried in a footer is not agreement to anything. */}
+          {isSignup && (
+            <p className="mt-1 text-center text-[11px] leading-relaxed text-zinc-500">
+              By creating an account you agree to the{" "}
+              <Link href="/terms" className="text-neon-green underline underline-offset-2">
+                Terms of Use
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-neon-green underline underline-offset-2">
+                Privacy Policy
+              </Link>
+              , including that GymBro gives estimates, not medical advice.
+            </p>
+          )}
         </form>
 
         {googleEnabled && (

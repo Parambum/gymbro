@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db/mongoose";
+import { currentUserId } from "@/lib/auth-helpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,12 +113,24 @@ function redact(message: string): string {
 }
 
 export async function GET() {
+  /**
+   * Diagnostics are for whoever runs this, not for whoever finds it.
+   *
+   * The detailed form names the database, counts its rows and describes the
+   * connection string — a free map of the backend for anyone who guesses the
+   * path. Signed out, the answer is reduced to up or down, which is all an
+   * uptime monitor needs and all an attacker gets.
+   */
+  const detailed = Boolean(await currentUserId());
   const started = Date.now();
+
   try {
     const conn = await connectDB();
     const db = conn.connection.db;
     if (!db) throw new Error("connected without a database handle");
     await db.admin().ping();
+
+    if (!detailed) return NextResponse.json({ ok: true });
     return NextResponse.json({
       ok: true,
       database: conn.connection.name,
@@ -126,6 +139,8 @@ export async function GET() {
       uri: shape(),
     });
   } catch (err) {
+    if (!detailed) return NextResponse.json({ ok: false }, { status: 503 });
+
     const { reason, hint } = classify(err);
     return NextResponse.json(
       {

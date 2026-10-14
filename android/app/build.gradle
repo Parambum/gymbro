@@ -16,10 +16,51 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    /**
+     * Release signing, read from keystore.properties — which is not in git.
+     *
+     * The app is sideloaded to gym members rather than published, so the
+     * signing key is the only thing that makes an update *this* app rather
+     * than someone else's repackaged copy. Android refuses to install an
+     * update signed by a different key, which is the protection; it only works
+     * if the key stays the same, and secret.
+     */
+    signingConfigs {
+        release {
+            def props = new Properties()
+            def f = rootProject.file("keystore.properties")
+            if (f.exists()) {
+                f.withInputStream { props.load(it) }
+                // rootProject, not file(): paths in keystore.properties are
+                // relative to android/, where that file lives, not to app/.
+                storeFile rootProject.file(props['storeFile'])
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // R8 shrinks and renames. It is not obfuscation worth relying on,
+            // but it removes the free map of the codebase that an unminified
+            // APK hands to anyone who unzips it.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig rootProject.file("keystore.properties").exists()
+                ? signingConfigs.release
+                : null
+            // Belt and braces: a release build is not debuggable by default,
+            // and saying so stops a later edit making it so by accident.
+            debuggable false
+        }
+        debug {
+            // Keep debug builds distinguishable on a phone, so a tester never
+            // has to guess which one is installed.
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
         }
     }
 

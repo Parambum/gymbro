@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Refuse plaintext, and refuse user-installed certificate authorities.
+
+  The second clause is the one that matters here. By default an Android app
+  trusts any CA the user has added, which is exactly how a member with the APK
+  on their own phone reads the entire API: install Burp or mitmproxy, add its
+  certificate, and every request and session token is in plain view. Trusting
+  only the system store breaks that, and costs nothing — we talk to one host
+  with an ordinary public certificate.
+
+  It also means a developer debugging through a proxy has to add a debug
+  override here deliberately, rather than every build shipping that hole.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -3,11 +3,21 @@ import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db/mongoose";
 import { User } from "@/models/User";
 import { RegisterSchema } from "@/lib/validation";
+import { rateLimit, clientIp, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 /** Create a credentials account. The client signs in immediately after. */
 export async function POST(req: Request) {
+  // Account creation is the one write an anonymous caller can reach, so it is
+  // also the one a script will use to fill the database overnight. Five an
+  // hour per address is far above what a real person needs and far below what
+  // automation wants.
+  const limited = await rateLimit(`register:${clientIp(req)}`, 5, 3600);
+  if (!limited.ok) {
+    return tooManyRequests(limited.retryAfter, "Too many sign-up attempts. Try again later.");
+  }
+
   const parsed = RegisterSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(

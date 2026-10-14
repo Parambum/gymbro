@@ -8,6 +8,56 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/coach": ["./shared/coach/system-prompt.md"],
   },
+
+  /**
+   * Security headers.
+   *
+   * These are the ones that can be turned on without knowing anything about
+   * the page they protect. A full Content-Security-Policy is deliberately not
+   * here: the app loads next/font, GSAP, three.js and inline styles, so a
+   * script-src policy needs per-request nonces threaded through the document,
+   * and a half-written CSP that silently blocks the 3D anatomy hub is worse
+   * than none. `frame-ancestors` is the part that needs no nonce, so it ships.
+   */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // Clickjacking. An attacker framing the app and overlaying their own
+          // controls can get a signed-in member to click things they cannot
+          // see. frame-ancestors is the modern form; X-Frame-Options is kept
+          // for older web views, which is what a cheap Android phone has.
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+
+          // Stop the browser second-guessing a Content-Type and running an
+          // uploaded file as script.
+          { key: "X-Content-Type-Options", value: "nosniff" },
+
+          // Downgrade to http is refused for two years, including subdomains.
+          // Auth.js session cookies are Secure, so a stripped connection does
+          // not merely leak -- it silently signs the user out.
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
+
+          // Do not leak the path someone was on - which can name a gym or a
+          // member id - to anything they click through to.
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+
+          // The app asks for a camera in the native shell, not in the browser.
+          // Nothing here needs a microphone, a location or a payment handler,
+          // so no embedded content gets to ask for one either.
+          {
+            key: "Permissions-Policy",
+            value: "camera=(self), microphone=(), geolocation=(self), payment=(), usb=()",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
