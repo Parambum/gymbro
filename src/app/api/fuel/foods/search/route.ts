@@ -7,6 +7,7 @@ import { FuelLog } from "@/models/FuelLog";
 import { FuelFavorite } from "@/models/FuelFavorite";
 import { fuelGuard } from "@/lib/fuel/server";
 import { rankFoods, tokenize } from "@/lib/fuel/search";
+import { candidatePool, toCandidate } from "@/lib/fuel/food-pool";
 import { entryMacrosFor } from "@/lib/fuel/log";
 
 export const runtime = "nodejs";
@@ -16,8 +17,9 @@ export const runtime = "nodejs";
  *
  * Two stages, because neither alone is enough:
  *
- *  1. Mongo narrows to a candidate pool — the text index plus a prefix regex.
- *     Fast, indexed, and completely unable to find "paneer" from "panner".
+ *  1. Mongo narrows to a candidate pool — the text index plus a prefix regex
+ *     (lib/fuel/food-pool.ts). Fast, indexed, and completely unable to find
+ *     "paneer" from "panner".
  *  2. `lib/fuel/search.ts` ranks that pool in memory, where edit distance and
  *     the user's own history can be brought to bear.
  *
@@ -29,8 +31,6 @@ export const runtime = "nodejs";
  * Every row carries the macros for its default portion, so the list answers
  * "how many calories is one katori of this" without a tap (§6).
  */
-const FUZZY_POOL_SIZE = 300;
-
 /**
  * Minimum rank score for a result found only by fuzzy matching against the
  * widened pool. A prefix match on a real word scores ~85 before bonuses; a
@@ -73,62 +73,11 @@ export async function GET(req: Request) {
     // Only global foods, plus this user's own. Never another user's custom food.
     const visible = { $or: [{ ownerUserId: null }, { ownerUserId: uid }] };
 
-    // ── stage 1: narrow ─────────────────────────────────────────────
+    // ── stage 1: narrow (shared with the describe parser) ───────────
     let pool: Array<Record<string, unknown>> = [];
     let narrowHits = 0;
-    const seen = new Set<string>();
     if (tokenize(q).length > 0) {
-      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-      // Two queries, not one `$or` over both: MongoDB cannot build an
-      // execution plan for a $text clause nested inside $or, so it must sit at
-      // the top level. Merging here costs one extra round trip and keeps the
-      // text index doing the work it is for.
-      //
-      // The regex is word-anchored. An unanchored one matches substrings
-      // buried mid-word — `/lassi/` hits "classic" — which put an Arby's
-      // sandwich at the top of a search for lassi.
-      const [textHits, regexHits] = await Promise.all([
-        FuelFood.find({ $text: { $search: q }, ...visible }).limit(60).lean(),
-        FuelFood.find({ searchText: { $regex: `\\b${escaped}`, $options: "i" }, ...visible })
-          .limit(60)
-          .lean(),
-      ]);
-
-      pool = [...textHits, ...regexHits].filter((f) => {
-        const id = String(f._id);
-        if (seen.has(id)) return false;
-        seen.add(id);
-        return true;
-      });
-
-      narrowHits = pool.length;
-
-      // Few hits — possibly a typo. Widen the pool, but ADD to it rather than
-      // replace: a rare exact match ("paneer" matches two rows out of 13,000)
-      // would otherwise be thrown away in favour of foods that don't match at
-      // all. That bug made correct spellings fail while typos returned junk.
-      //
-      // The widening is anchored on the query's first few characters rather
-      // than "most popular", because a blind sample of 300 out of 13,000 is
-      // 2% and almost never contains the word the user meant. Typos usually
-      // preserve the opening — "panner" for "paneer" — so this puts the right
-      // candidates in front of the edit-distance check.
-      if (pool.length < 5) {
-        const stem = escaped.slice(0, Math.min(3, Math.max(2, escaped.length - 1)));
-        const widened = await FuelFood.find({
-          searchText: { $regex: `\\b${stem}`, $options: "i" },
-          ...visible,
-        })
-          .limit(FUZZY_POOL_SIZE)
-          .lean();
-        for (const f of widened) {
-          if (!seen.has(String(f._id))) {
-            seen.add(String(f._id));
-            pool.push(f);
-          }
-        }
-      }
+      ({ pool, narrowHits } = await candidatePool(q, visible));
     } else {
       // No query: show what they actually eat, so a repeat is three taps.
       const personal = [...new Set([...favoriteIds, ...frequentIds, ...recentIds])]
@@ -139,18 +88,7 @@ export async function GET(req: Request) {
     }
 
     // ── stage 2: rank ───────────────────────────────────────────────
-    const candidates = pool.map((f) => ({
-      id: String(f._id),
-      name: String(f.name),
-      brand: (f.brand as string | null) ?? null,
-      searchText: String(f.searchText ?? ""),
-      aliases: (f.aliases as string[]) ?? [],
-      isVerified: Boolean(f.isVerified),
-      popularity: Number(f.popularity ?? 0),
-      per100g: f.per100g as { kcal: number; proteinG: number; carbsG: number; fatG: number; fiberG: number },
-      vegFlag: f.vegFlag as string,
-      source: f.source as string,
-    }));
+    const candidates = pool.map(toCandidate);
 
     let ranked = rankFoods(q, candidates, { frequentIds, recentIds, favoriteIds }, limit);
 

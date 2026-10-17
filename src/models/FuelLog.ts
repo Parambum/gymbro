@@ -60,8 +60,16 @@ const FuelLogSchema = new Schema(
      */
     wasEdited: { type: Boolean, default: false },
     /**
+     * On-device food model provenance: which model version looked at the
+     * photo and what it thought it saw. Paired with what was actually logged,
+     * this is how real-world accuracy gets measured — and the evidence for
+     * which dishes the next model most needs to learn. No image is stored.
+     */
+    visionModel: { type: String, default: null, maxlength: 40 },
+    visionClass: { type: String, default: null, maxlength: 60 },
+    /**
      * Reserved for a future private blob store. v1 never persists the photo:
-     * the image is sent to the vision API in memory and dropped (see README).
+     * recognition runs on the phone and the image never reaches the server.
      */
     photoUrl: { type: String, default: null },
 

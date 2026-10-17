@@ -107,6 +107,26 @@ export async function scheduleDailyReminder(opts: {
   }
 }
 
+/**
+ * Reminders currently scheduled on the device, by id and time. The phone is
+ * the source of truth — a toggle that read anything else could say "on" for a
+ * reminder the OS has long since dropped.
+ */
+export async function scheduledReminders(): Promise<Array<{ id: number; hour: number; minute: number }>> {
+  if (!isNative()) return [];
+  try {
+    const { LocalNotifications } = await import("@capacitor/local-notifications");
+    const { notifications } = await LocalNotifications.getPending();
+    return notifications.map((n) => ({
+      id: n.id,
+      hour: n.schedule?.on?.hour ?? 0,
+      minute: n.schedule?.on?.minute ?? 0,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /** Cancel a reminder previously scheduled under this id. */
 export async function cancelReminder(id: number): Promise<void> {
   if (!isNative()) return;

@@ -43,7 +43,7 @@ export async function GET(req: Request) {
     const uid = new Types.ObjectId(guard.userId);
     const weekAgo = addDaysIso(date, -6);
 
-    const [bundle, rawEntries, water, streakDates, workout, activities, trainingDates] =
+    const [bundle, rawEntries, water, streakDates, workout, activities, trainingDates, prevMeals] =
       await Promise.all([
         loadProfileBundle(guard.userId, date),
         FuelLog.find({ userId: uid, localDate: date }).sort({ loggedAt: 1 }).lean(),
@@ -56,6 +56,8 @@ export async function GET(req: Request) {
         Activity.find({ userId: uid, date }).select({ type: 1, distanceM: 1, name: 1 }).lean(),
         // How many of the last 7 days had a session — the denominator cycling needs.
         Workout.distinct("date", { userId: uid, date: { $gte: weekAgo, $lte: date } }),
+        // Which meals the day before has, so an empty meal can offer "same as yesterday".
+        FuelLog.distinct("meal", { userId: uid, localDate: addDaysIso(date, -1) }),
       ]);
 
     if (!bundle.profile) {
@@ -148,6 +150,7 @@ export async function GET(req: Request) {
       })),
       bridgeNotes,
       streak: loggingStreak(streakDates as string[], todayIso()),
+      previousDayMeals: prevMeals as string[],
     });
   } catch (err) {
     console.error("[fuel/day] failed:", err);

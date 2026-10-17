@@ -5,8 +5,14 @@ import { FuelFood } from "@/models/FuelFood";
 import { FuelPortion } from "@/models/FuelPortion";
 import { FuelLog } from "@/models/FuelLog";
 import { fuelGuard } from "@/lib/fuel/server";
-import { FuelAiEntrySchema, FuelLogFoodSchema, FuelQuickAddSchema } from "@/lib/validation";
+import {
+  FuelAiEntrySchema,
+  FuelLogFoodSchema,
+  FuelQuickAddSchema,
+  FuelVisionEntrySchema,
+} from "@/lib/validation";
 import { entryMacrosFor } from "@/lib/fuel/log";
+import { bundledVisionFood } from "@/lib/fuel/vision/server";
 import { resolveGrams } from "@/lib/fuel/portions";
 import { isValidIso, todayIso, addDaysIso } from "@/lib/date-utils";
 
@@ -36,6 +42,9 @@ export async function POST(req: Request) {
 
   const raw = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!raw) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+
+  // Snap-a-meal names a published food by its source id; the server does the maths.
+  if (raw.entryMethod === "photo" && raw.foodRef) return saveVisionEntry(raw, guard.userId);
 
   const isAiDraft = raw.entryMethod === "photo" || raw.entryMethod === "text";
   if (isAiDraft) return saveAiEntry(raw, guard.userId);
@@ -157,6 +166,85 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ entry: serialize(saved) }, { status: 201 });
   } catch {
+    return NextResponse.json(
+      { error: "Could not save. Check the database connection." },
+      { status: 503 },
+    );
+  }
+}
+
+/**
+ * Commit one item from Snap-a-meal.
+ *
+ * The phone recognised the dish and the user confirmed it and the portion.
+ * What reaches the server is a food reference and a gram weight; composition
+ * comes from the database row for that reference (or, before a re-seed, from
+ * the bundled copy of the same published figures). Nothing the client says
+ * about calories is read.
+ */
+async function saveVisionEntry(raw: Record<string, unknown>, userId: string) {
+  const parsed = FuelVisionEntrySchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+      { status: 400 },
+    );
+  }
+  const v = parsed.data;
+  if (v.localDate > addDaysIso(todayIso(), 1)) {
+    return NextResponse.json({ error: "You can only log today or a past day." }, { status: 400 });
+  }
+
+  try {
+    await connectDB();
+    const uid = new Types.ObjectId(userId);
+
+    const stored = await FuelFood.findOne({
+      source: v.foodRef.source,
+      sourceRef: v.foodRef.sourceRef,
+      ownerUserId: null,
+    }).lean();
+    const bundled = stored ? null : bundledVisionFood(v.foodRef.source, v.foodRef.sourceRef);
+    if (!stored && !bundled) {
+      return NextResponse.json({ error: "That food isn't in the database." }, { status: 404 });
+    }
+
+    const per100g = stored ? stored.per100g : bundled!.per100g;
+    const doc = {
+      userId: uid,
+      localDate: v.localDate,
+      loggedAt: new Date(),
+      meal: v.meal,
+      foodId: stored?._id ?? null,
+      portionId: null,
+      foodName: stored?.name ?? bundled!.name,
+      portionLabel: v.portionLabel ?? null,
+      quantity: v.quantity,
+      unit: "household",
+      gramsResolved: Math.round(v.grams * 10) / 10,
+      ...entryMacrosFor(per100g, v.grams),
+      entryMethod: "photo" as const,
+      confidence: v.vision.confidence,
+      wasEdited: v.vision.edited || v.vision.chosen !== v.vision.predicted,
+      visionModel: v.vision.model,
+      visionClass: v.vision.predicted,
+      photoUrl: null,
+      clientId: v.clientId ?? null,
+    };
+
+    try {
+      const saved = await FuelLog.create(doc);
+      if (doc.foodId) await FuelFood.updateOne({ _id: doc.foodId }, { $inc: { popularity: 1 } });
+      return NextResponse.json({ entry: serialize(saved) }, { status: 201 });
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000 && doc.clientId) {
+        const existing = await FuelLog.findOne({ userId: uid, clientId: doc.clientId });
+        if (existing) return NextResponse.json({ entry: serialize(existing), duplicate: true });
+      }
+      throw err;
+    }
+  } catch (err) {
+    console.error("[fuel/log] photo entry failed:", err);
     return NextResponse.json(
       { error: "Could not save. Check the database connection." },
       { status: 503 },

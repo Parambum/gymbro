@@ -241,6 +241,40 @@ export const FuelAiEntrySchema = z.object({
 
 export type FuelAiEntryInput = z.infer<typeof FuelAiEntrySchema>;
 
+/**
+ * One item from Snap-a-meal. The phone recognised the dish; the server is
+ * told only *which* published food it is and how many grams — it looks the
+ * composition up itself, so a tampered request can change what was eaten but
+ * never what that food contains.
+ */
+export const FuelVisionEntrySchema = z.object({
+  localDate: IsoDate,
+  meal: z.enum(MEALS),
+  entryMethod: z.literal("photo"),
+  foodRef: z.object({
+    source: z.enum(["usda", "indb", "off"]),
+    sourceRef: z.string().trim().min(1).max(40),
+  }),
+  /** Total grams eaten — servings × the serving's weight. */
+  grams: z.number().positive("Enter how much you had").max(5000, "That portion looks too big"),
+  /** How many of `portionLabel`, for display ("2 × 1 hamburger bun"). */
+  quantity: z.number().positive().max(20).default(1),
+  portionLabel: z.string().trim().max(60).nullable().optional(),
+  vision: z.object({
+    model: z.string().trim().min(1).max(40),
+    /** The class the model ranked first. */
+    predicted: z.string().trim().min(1).max(60),
+    /** The class the user logged, which may differ. */
+    chosen: z.string().trim().min(1).max(60),
+    confidence: z.number().min(0).max(1),
+    /** Portion or food changed from what the photo suggested. */
+    edited: z.boolean().default(false),
+  }),
+  clientId: z.string().trim().min(8).max(64).optional(),
+});
+
+export type FuelVisionEntryInput = z.infer<typeof FuelVisionEntrySchema>;
+
 export const FuelWeightSchema = z.object({
   localDate: IsoDate,
   weightKg: z.number().min(20, "Weight looks too low").max(400, "Weight looks too high"),

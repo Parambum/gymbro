@@ -233,8 +233,11 @@ anything else.
 
 ### Setting it up
 
-The food database ships in the repo (`src/lib/data/fuel-foods.json`, 13,294
-foods), so all a fresh environment needs is to load it into Mongo:
+The food database ships in the repo — 13,294 USDA foods
+(`src/lib/data/fuel-foods.json`), ~3,000 Indian packaged products from Open
+Food Facts (`fuel-foods-india.json`) and 847 home-cooked Indian dishes from the
+Indian Nutrient Databank (`fuel-foods-indb.json`) — so all a fresh environment
+needs is to load it into Mongo:
 
 ```bash
 npm run fuel:seed       # create the indexes + upsert the food database
@@ -256,8 +259,10 @@ below. The running app never talks to USDA; that is a build-time step only.
 
 ### No invented nutrition data
 
-Every per-100g figure comes from USDA FoodData Central and is stored with the
-`fdcId` it came from, so any number in the app can be traced to its source.
+Every per-100g figure comes from a published source — USDA FoodData Central,
+the Indian Nutrient Databank, or a packet label via Open Food Facts (badged
+unverified) — and is stored with its upstream id, so any number in the app can
+be traced back. Sources and their licences: `src/lib/data/ATTRIBUTION.md`.
 Foods without a complete macro profile, or with composition that cannot be
 true, are dropped rather than filled in — there is no hand-typed composition
 anywhere.
@@ -280,10 +285,12 @@ npm run fuel:import              # rewrite src/lib/data/fuel-foods.json
 npm run fuel:seed
 ```
 
-Indian coverage is the known weak spot: USDA carries roughly 120 Indian
-dishes. The staples are present and searchable in Indian terms; khichdi, raita
-and lassi are not. Indian packaged brands arrive via Open Food Facts through
-the barcode scanner, which caches every scan into the database.
+Indian dishes come from the Indian Nutrient Databank (`npm run fuel:import:indb`,
+spreadsheet under `scripts-tmp/indb/`). It is calculated from recipes, and
+counts all the frying oil as eaten for deep-fried dishes — the importer drops
+those rows (and any whose energy disagrees with its own macros) rather than
+correct them. Indian packaged brands arrive via Open Food Facts through the
+barcode scanner, which caches every scan into the database.
 
 ### Screens
 
@@ -295,7 +302,11 @@ the barcode scanner, which caches every scan into the database.
 | `/fuel/profile` | Targets, your numbers, settings, disclaimer |
 | `/fuel/onboarding` | Five-step setup that produces the first target |
 
-### Five ways to log
+### Five ways to log, and the shortcuts
+
+Also: **Same as yesterday** on an empty meal, **meal and weigh-in reminders**
+in the Android app, and **CSV export** of the food log and weigh-ins
+(`/fuel/profile`).
 
 Everything funnels into the same portion sheet, so the amount is confirmed in
 exactly one place:
@@ -303,9 +314,9 @@ exactly one place:
 | Path | What it does |
 |---|---|
 | **Search** | Debounced, typo- and transliteration-tolerant. `dhal`/`daal`/`dal` all hit; `panner` finds paneer. An empty query lists what you actually eat, so a repeat meal is three taps. |
-| **Barcode** | Native `BarcodeDetector` where the browser has it (Chrome/Android), number pad everywhere else. Open Food Facts, cached — including misses. |
-| **Snap a meal** | Photo → Claude vision → an editable draft. Never auto-saved. |
-| **Describe it** | "2 roti, 1 katori dal aur ek glass doodh" → the same draft. Handles Hinglish. |
+| **Barcode** | Google ML Kit's native scanner in the Android app; `BarcodeDetector` in browsers that have it; number pad everywhere else. Open Food Facts, cached — including misses. |
+| **Snap a meal** | A food model trained for this app runs **on the phone** — no key, photo never uploaded, works offline. Dish → USDA/INDB composition → typical serving → "Add this to today?" |
+| **Describe it** | "2 roti, 1 katori dal aur ek glass doodh" → the same draft. Parsed locally (no key); uses Claude instead if `ANTHROPIC_API_KEY` is set. |
 | **Quick add** | Raw numbers, no food behind them, for when looking it up isn't worth it. |
 
 Plus **custom foods** (created inline when search comes up empty) and
@@ -332,26 +343,33 @@ Targets are **append-only**: recalculating inserts a row with a new
 `effectiveFrom` instead of overwriting, so a day in the past is always read
 against the target that was actually in force then.
 
-### The AI paths
+### Snap a meal, and describing it
 
-Photo and natural-language logging go through `ANTHROPIC_API_KEY` (§7 specifies
-the Anthropic API; the chat coach's Groq option doesn't apply here). Without the
-key those two routes return 503 and say so — search, barcode, custom foods and
-quick-add all keep working, which is the point of never making AI the only way in.
+**Snap** (`src/components/fuel/snap-meal.tsx`) runs a 139-dish food classifier
+in the browser — DINOv2-S with a head trained on Food-101 and an Indian food
+dataset, int8 ONNX, ~24 MB, executed by `onnxruntime-web` in a Web Worker. It is
+downloaded once and cached, so it then works offline. How it was trained and
+how well it does: `ml/food-vision/README.md` and `ml/food-vision/reports/`.
 
-- **Nothing is ever auto-saved.** Both routes return a draft; the user edits it
-  and commits through `/api/fuel/log` like any other entry.
-- **Photos are never persisted.** The image is compressed client-side, sent to
-  the model in memory, and dropped when the request ends. `FuelLog.photoUrl`
-  exists for a future blob store and is always null today — which makes "delete
-  the photo with the entry" trivially true.
-- Items are matched against the food database through the same ranker search
-  uses. Where a match is kept, **the database's composition is what gets
-  stored** — the model estimated the portion, which is the hard part; it didn't
-  need to guess what the food contains.
-- Confidence below 0.6 is flagged in the draft before you reach the save button,
-  and the model's own calorie range is shown rather than a single false-precise
-  number.
+- **The photo never leaves the phone.** Only the confirmed food (a USDA/INDB
+  id) and a gram weight reach the server, which looks the composition up itself.
+- **The model names the dish; it never supplies a number.** Composition and the
+  default portion (USDA's NHANES "typical serving" where one exists) come from
+  `scripts/fuel/vision-classes.mjs` → `src/lib/data/food-vision-classes.json`.
+  Dishes with no trustworthy composition open search instead of guessing.
+- **Confidence is calibrated.** Above a threshold chosen on validation data the
+  card leads with one answer; below it, a shortlist. Several dishes can be ticked
+  for a thali; combination dishes (chole bhature, pav bhaji) log as their parts.
+- **Nothing is auto-saved**: the last step is "Add this to today?", showing the
+  day's new total, with yes and no.
+- Each photo log records the model version, what it predicted and whether the
+  user changed it — the evidence for what the next model should learn.
+
+**Describe it** parses amounts locally and finds each food through ordinary
+search, preferring foods that come in the unit you named ("a glass of doodh" is
+milk, not Doodh biscuits). If `ANTHROPIC_API_KEY` is set it uses Claude instead,
+which copes better with free-form sentences. Either way the result is a draft
+you check before saving.
 
 ### The training bridge
 

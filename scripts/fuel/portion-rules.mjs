@@ -29,6 +29,8 @@ export const FOOD_RULES = [
   { test: /\bpoha\b|flattened rice|rice flakes/i, portions: "katori", aliases: ["poha", "aval"] },
   { test: /\bpaneer\b/i, portions: "paneerCube", aliases: ["paneer", "panir", "cottage cheese"] },
   { test: /\bsamosa\b/i, portions: "weightOnly", aliases: ["samosa", "singhara"] },
+  // Before pakora: its /bhaji/ would otherwise claim "pav bhaji".
+  { test: /pav bhaji/i, portions: "katori", aliases: ["pav bhaji"] },
   { test: /\bpakora|bhaji|fritter/i, portions: "weightOnly", aliases: ["pakora", "bhajji"] },
   { test: /\bbiryani|\bpulao|pilaf/i, portions: "riceServing", aliases: ["biryani", "pulao"] },
   { test: /\bkhichdi|khichri/i, portions: "riceServing", aliases: ["khichdi"] },
@@ -44,7 +46,6 @@ export const FOOD_RULES = [
   { test: /\bjalebi\b/i, portions: "weightOnly", aliases: ["jalebi"] },
   { test: /\bkheer\b|rice pudding|payasam/i, portions: "katori", aliases: ["kheer", "payasam"] },
   { test: /\bdhokla\b/i, portions: "weightOnly", aliases: ["dhokla"] },
-  { test: /pav bhaji/i, portions: "katori", aliases: ["pav bhaji"] },
   { test: /\bvada\b|\bwada\b/i, portions: "weightOnly", aliases: ["vada"] },
 
   // ── dals & legumes ───────────────────────────────────────────────

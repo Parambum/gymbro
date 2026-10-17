@@ -5,6 +5,7 @@ import Link from "next/link";
 import { EyeOff, Loader2, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { SectionCard, Toggle } from "./controls";
 import { ThemePicker } from "@/components/theme-picker";
+import { RemindersCard } from "./reminders-card";
 import { ACTIVITY_LEVELS, type ActivityLevel, type Goal, type Sex } from "@/lib/fuel/types";
 import { ageOn, bmiOf, maxRateKgPerWeek } from "@/lib/fuel/engine";
 import { prettyDate, todayIso } from "@/lib/date-utils";
@@ -268,6 +269,10 @@ export function ProfileScreen() {
             onChange={(v) => patch({ exerciseCaloriesEnabled: v })}
           />
         </div>
+      </SectionCard>
+
+      <SectionCard title="Reminders & data">
+        <RemindersCard />
       </SectionCard>
 
       <p className="flex gap-2 px-1 font-mono text-[10px] leading-relaxed text-zinc-600">

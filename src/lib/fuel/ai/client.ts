@@ -2,18 +2,16 @@ import Anthropic from "@anthropic-ai/sdk";
 import { parseDraft, normaliseDraft, type AiDraft } from "./schema";
 
 /**
- * The one place Fuel talks to a model.
+ * The one place Fuel talks to a hosted model.
  *
- * §7 specifies the Anthropic API for these features, so unlike the chat coach
- * — which can answer on Groq — Snap-a-meal and natural-language logging need
- * `ANTHROPIC_API_KEY`. Without it the routes return 503 and the UI falls back
- * to manual entry, which is the whole point of never making the AI path the
- * only way in.
+ * Only natural-language logging uses it, and only when `ANTHROPIC_API_KEY` is
+ * set; without a key /api/fuel/parse falls back to the local parser in
+ * lib/fuel/describe.ts. Photo logging never comes here — it runs on-device.
  *
  * The key is read here and never leaves the server.
  */
 
-export const VISION_MODEL = "claude-opus-5";
+export const DRAFT_MODEL = "claude-opus-5";
 
 /** Vercel's Hobby plan caps a function at 60s; leave room to return a body. */
 const REQUEST_TIMEOUT_MS = 50_000;
@@ -49,7 +47,7 @@ async function requestDraft(
 ): Promise<AiDraft> {
   const send = (messages: Anthropic.MessageParam[]) =>
     client.messages.create({
-      model: VISION_MODEL,
+      model: DRAFT_MODEL,
       max_tokens: 4000,
       system,
       output_config: { effort },
@@ -75,23 +73,6 @@ async function requestDraft(
     ]);
     return normaliseDraft(parseDraft(textOf(second)));
   }
-}
-
-export async function draftFromImage(
-  client: Anthropic,
-  system: string,
-  imageBase64: string,
-  mediaType: "image/jpeg" | "image/png" | "image/webp",
-): Promise<AiDraft> {
-  return requestDraft(
-    client,
-    system,
-    [
-      { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
-      { type: "text", text: "Analyze this meal." },
-    ],
-    "medium",
-  );
 }
 
 export async function draftFromText(

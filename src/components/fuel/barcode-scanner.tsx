@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Keyboard, Loader2 } from "lucide-react";
+import { Camera, Keyboard, Loader2, ScanLine } from "lucide-react";
+import { haptic, isNative, scanBarcode } from "@/lib/native";
 
 /**
  * Barcode capture, with no scanning library.
@@ -15,6 +16,12 @@ import { Camera, Keyboard, Loader2 } from "lucide-react";
  *
  * The typed path is not a consolation prize: for a packet already in the
  * cache it is often faster than focusing a camera.
+ *
+ * Inside the Android app none of that applies: the web view has no
+ * `BarcodeDetector`, so the scan goes to Google's ML Kit scanner instead —
+ * native, full-screen, works offline and copes with crumpled foil. It opens
+ * straight away, because someone who tapped "Scan" is already holding the
+ * packet.
  */
 
 interface BarcodeDetectorLike {
@@ -42,8 +49,35 @@ export function BarcodeScanner({
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  const supported = detectorCtor() !== null;
-  const [mode, setMode] = useState<"camera" | "manual">(supported ? "camera" : "manual");
+  const native = isNative();
+  const supported = !native && detectorCtor() !== null;
+  const [mode, setMode] = useState<"camera" | "manual" | "native">(
+    native ? "native" : supported ? "camera" : "manual",
+  );
+  const [nativeBusy, setNativeBusy] = useState(false);
+  const [nativeMissed, setNativeMissed] = useState(false);
+
+  const scanNatively = useCallback(async () => {
+    setNativeBusy(true);
+    setNativeMissed(false);
+    const code = await scanBarcode();
+    setNativeBusy(false);
+    if (code && /^\d{8,14}$/.test(code)) {
+      void haptic("success");
+      onCode(code);
+    } else {
+      // Cancelled, denied, or a QR code rather than a product barcode.
+      setNativeMissed(true);
+    }
+  }, [onCode]);
+
+  // Open the native scanner as soon as this view appears.
+  const openedRef = useRef(false);
+  useEffect(() => {
+    if (mode !== "native" || openedRef.current) return;
+    openedRef.current = true;
+    void scanNatively();
+  }, [mode, scanNatively]);
   const [typed, setTyped] = useState("");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -111,6 +145,39 @@ export function BarcodeScanner({
 
   useEffect(() => stop, [stop]);
 
+  if (mode === "native") {
+    return (
+      <div className="px-4 pb-4 pt-3">
+        <button
+          type="button"
+          onClick={scanNatively}
+          disabled={nativeBusy || busy}
+          className="flex min-h-[64px] w-full items-center justify-center gap-2 rounded-xl border border-hot-green bg-hot-green/10 font-mono text-[11px] uppercase tracking-widest text-neon-green transition-colors hover:bg-hot-green/20 disabled:opacity-60"
+        >
+          {nativeBusy || busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ScanLine className="h-5 w-5" />}
+          {busy ? "Looking it up" : nativeBusy ? "Scanner open" : nativeMissed ? "Scan again" : "Scan barcode"}
+        </button>
+        {nativeMissed && !error && (
+          <p className="mt-2 text-center font-mono text-[10px] leading-relaxed text-zinc-500">
+            Nothing scanned. Try again in better light, or type the number under the barcode.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="mt-3 font-mono text-[11px] leading-relaxed text-neon-crimson">
+            {error}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => setMode("manual")}
+          className="mx-auto mt-4 flex min-h-[44px] items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-200"
+        >
+          <Keyboard className="h-3.5 w-3.5" /> Type the number instead
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 pb-4 pt-3">
       {mode === "camera" ? (
@@ -145,7 +212,7 @@ export function BarcodeScanner({
               className="mt-1.5 h-12 w-full rounded-xl border border-edge bg-void px-3 text-center font-display text-xl tracking-widest text-zinc-100 placeholder:text-zinc-700 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green"
             />
           </label>
-          {!supported && (
+          {!supported && !native && (
             <p className="mt-2 font-mono text-[10px] leading-relaxed text-zinc-500">
               This browser can&apos;t scan barcodes directly. Chrome on Android can — or type the
               digits under the barcode.
@@ -167,6 +234,19 @@ export function BarcodeScanner({
         <p role="alert" className="mt-3 font-mono text-[11px] leading-relaxed text-neon-crimson">
           {error ?? cameraError}
         </p>
+      )}
+
+      {native && (
+        <button
+          type="button"
+          onClick={() => {
+            setMode("native");
+            void scanNatively();
+          }}
+          className="mx-auto mt-4 flex min-h-[44px] items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-zinc-500 transition-colors hover:text-zinc-200"
+        >
+          <Camera className="h-3.5 w-3.5" /> Use the scanner
+        </button>
       )}
 
       {supported && (

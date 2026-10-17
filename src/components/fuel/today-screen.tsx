@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Dumbbell, Flame, Trash2 } from "lucide-react";
-import { AddButton, LogSheet } from "./log-sheet";
+import { Camera, ChevronLeft, ChevronRight, CopyPlus, Dumbbell, Flame, Loader2, Trash2 } from "lucide-react";
+import { AddButton, LogSheet, type View } from "./log-sheet";
 import { CalorieRing, MacroBars, WaterRow } from "./today-widgets";
 import { GLASS_ML, MEAL_LABELS, type MacroTotals, type Meal } from "@/lib/fuel/types";
 import { addDaysIso, prettyDate, todayIso } from "@/lib/date-utils";
+import { haptic } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 interface Entry {
@@ -39,6 +40,8 @@ interface Day {
   cardio: Array<{ name: string; type: string; distanceKm: number }>;
   bridgeNotes: string[];
   streak: number;
+  /** Meals that have entries on the day before this one. */
+  previousDayMeals?: string[];
 }
 
 /**
@@ -58,6 +61,37 @@ export function TodayScreen() {
   const [day, setDay] = useState<Day | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [sheetMeal, setSheetMeal] = useState<Meal | null>(null);
+  const [sheetView, setSheetView] = useState<View>("search");
+
+  const [copying, setCopying] = useState<Meal | null>(null);
+
+  /** "Same as yesterday" — the repeat breakfast in one tap. */
+  async function copyYesterday(meal: Meal) {
+    setCopying(meal);
+    try {
+      const res = await fetch("/api/fuel/log/copy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fromDate: addDaysIso(date, -1), toDate: date, meal }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setFailure(json.error ?? "Couldn't copy that meal.");
+        return;
+      }
+      void haptic("success");
+      load(date);
+    } catch {
+      setFailure("No connection. Nothing was copied.");
+    } finally {
+      setCopying(null);
+    }
+  }
+
+  const openSheet = (meal: Meal, view: View = "search") => {
+    setSheetView(view);
+    setSheetMeal(meal);
+  };
 
   const load = useCallback(
     (forDate: string) => {
@@ -268,8 +302,24 @@ export function TodayScreen() {
                   : `${Math.round(m.totals.kcal)} kcal · ${Math.round(m.totals.proteinG)} g protein`}
               </p>
             </div>
-            <AddButton onClick={() => setSheetMeal(m.meal)} label={`Add to ${MEAL_LABELS[m.meal]}`} />
+            <AddButton onClick={() => openSheet(m.meal)} label={`Add to ${MEAL_LABELS[m.meal]}`} />
           </div>
+
+          {m.entries.length === 0 && day.previousDayMeals?.includes(m.meal) && (
+            <button
+              type="button"
+              onClick={() => copyYesterday(m.meal)}
+              disabled={copying !== null}
+              className="mt-3 flex min-h-[40px] items-center gap-2 rounded-lg border border-dashed border-edge px-3 font-mono text-[10px] uppercase tracking-widest text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:opacity-60"
+            >
+              {copying === m.meal ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CopyPlus className="h-3.5 w-3.5" />
+              )}
+              Same as {isToday ? "yesterday" : "the day before"}
+            </button>
+          )}
 
           {m.entries.length > 0 && (
             <ul className="mt-3 space-y-1.5">
@@ -317,19 +367,34 @@ export function TodayScreen() {
         </p>
       )}
 
-      {/* ── the primary action, thumb-reachable above the tab bar ── */}
-      <button
-        type="button"
-        onClick={() => setSheetMeal(nextMealFor(new Date()))}
-        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-14 items-center gap-2 rounded-full border border-hot-green bg-abyss px-5 font-mono text-[11px] uppercase tracking-widest text-neon-green shadow-neon-green transition-colors hover:bg-hot-green/10 md:bottom-6"
-      >
-        <Flame className="h-4 w-4" /> Log food
-      </button>
+      {/* ── the primary actions, thumb-reachable above the tab bar ──
+          The camera gets its own button: on a phone, pointing it at the
+          plate is the fastest way in, and it should be one tap, not two.
+          Offset left of the AI coach's button, which owns the corner. */}
+      <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-20 z-40 flex items-center gap-2 md:bottom-6">
+        <button
+          type="button"
+          onClick={() => openSheet(nextMealFor(new Date()), "snap")}
+          aria-label="Snap a meal"
+          className="flex h-14 w-14 items-center justify-center rounded-full border border-hot-green bg-abyss text-neon-green shadow-neon-green transition-colors hover:bg-hot-green/10"
+        >
+          <Camera className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => openSheet(nextMealFor(new Date()))}
+          className="flex h-14 items-center gap-2 rounded-full border border-hot-green bg-abyss px-5 font-mono text-[11px] uppercase tracking-widest text-neon-green shadow-neon-green transition-colors hover:bg-hot-green/10"
+        >
+          <Flame className="h-4 w-4" /> Log food
+        </button>
+      </div>
 
       <LogSheet
         open={sheetMeal !== null}
         meal={sheetMeal ?? "breakfast"}
         date={date}
+        initialView={sheetView}
+        day={{ consumedKcal: day.consumed.kcal, targetKcal: day.target?.kcal ?? null, eyesOff }}
         onClose={() => setSheetMeal(null)}
         onLogged={() => load(date)}
       />

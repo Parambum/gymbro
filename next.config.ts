@@ -21,6 +21,16 @@ const nextConfig: NextConfig = {
    */
   async headers() {
     return [
+      // The on-device food model. Files under a version folder never change
+      // (a new model gets a new folder), so the phone may keep them forever.
+      // model.json is excluded: it is how the app learns a new model exists.
+      {
+        source: "/models/:version/food.onnx",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          { key: "Content-Type", value: "application/octet-stream" },
+        ],
+      },
       {
         source: "/:path*",
         headers: [

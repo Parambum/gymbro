@@ -5,6 +5,7 @@ import { fuelGuard } from "@/lib/fuel/server";
 import { anthropicClient, describeAiError, draftFromText } from "@/lib/fuel/ai/client";
 import { matchDraftItems } from "@/lib/fuel/ai/match";
 import { TEXT_SYSTEM_PROMPT } from "@/lib/fuel/ai/prompts";
+import { draftFromDescription } from "@/lib/fuel/describe-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -26,23 +27,33 @@ export async function POST(req: Request) {
   const guard = await fuelGuard();
   if (guard.error) return guard.error;
 
-  const client = anthropicClient();
-  if (!client) {
-    return NextResponse.json(
-      {
-        error:
-          "Describing a meal needs an Anthropic API key (ANTHROPIC_API_KEY). Search, scan and quick-add all still work.",
-      },
-      { status: 503 },
-    );
-  }
-
   const parsed = BodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Say what you ate" },
       { status: 400 },
     );
+  }
+
+  // No key is not an error: the local parser reads amounts and finds each
+  // food through ordinary search. A model is better with free-form sentences,
+  // so it is used when configured — but it is never required.
+  const client = anthropicClient();
+  if (!client) {
+    try {
+      await connectDB();
+      const draft = await draftFromDescription(parsed.data.text, guard.userId);
+      if (draft.items.length === 0) {
+        return NextResponse.json(
+          { error: "Couldn't find any of that. Try one food per comma — “2 roti, 1 katori dal”." },
+          { status: 422 },
+        );
+      }
+      return NextResponse.json({ source: "text", ...draft });
+    } catch (err) {
+      console.error("[fuel/parse] local parse failed:", err);
+      return NextResponse.json({ error: "Couldn't read that. Search for it instead." }, { status: 503 });
+    }
   }
 
   try {

@@ -1,13 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { AlertTriangle, Camera, Check, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Check, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { MEAL_LABELS, type Meal } from "@/lib/fuel/types";
 import { cn } from "@/lib/utils";
 
 /**
- * Snap-a-meal and natural-language logging, and the editable draft they both
- * produce (§7.1, §7.2).
+ * Natural-language logging, and the editable draft it produces (§7.2).
+ *
+ * Photos no longer come through here: Snap-a-meal runs a food model on the
+ * phone (snap-meal.tsx) and never sends the image anywhere.
  *
  * The rule this screen exists to enforce: **nothing is ever saved without the
  * user looking at it.** A photo estimate is a starting point, not a reading —
@@ -48,24 +50,6 @@ interface Row extends DraftItem {
 }
 
 const LOW_CONFIDENCE = 0.6;
-const MAX_EDGE = 1024;
-
-/** Downscale and re-encode before upload — §7 wants this compressed client-side. */
-async function compress(file: File): Promise<{ base64: string; mediaType: "image/jpeg" }> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("canvas unavailable");
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-  return { base64: dataUrl.split(",")[1], mediaType: "image/jpeg" };
-}
 
 export function AiDraftReview({
   meal,
@@ -78,7 +62,6 @@ export function AiDraftReview({
   onLogged: () => void;
   onCancel: () => void;
 }) {
-  const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
   const [thinking, setThinking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -87,10 +70,8 @@ export function AiDraftReview({
   const [rows, setRows] = useState<Row[] | null>(null);
   const [plateNotes, setPlateNotes] = useState("");
   const [unclear, setUnclear] = useState<string[]>([]);
-  const [source, setSource] = useState<"photo" | "text">("photo");
 
-  function ingest(json: { items: DraftItem[]; plateNotes?: string; unclear?: string[] }, from: "photo" | "text") {
-    setSource(from);
+  function ingest(json: { items: DraftItem[]; plateNotes?: string; unclear?: string[] }) {
     setPlateNotes(json.plateNotes ?? "");
     setUnclear(json.unclear ?? []);
     setRows(
@@ -103,29 +84,6 @@ export function AiDraftReview({
         removed: false,
       })),
     );
-  }
-
-  async function analysePhoto(file: File) {
-    setThinking(true);
-    setFailure(null);
-    try {
-      const { base64, mediaType } = await compress(file);
-      const res = await fetch("/api/fuel/vision", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ image: base64, mediaType }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setFailure(json.error ?? "Couldn't read that photo.");
-        return;
-      }
-      ingest(json, "photo");
-    } catch {
-      setFailure("Couldn't process that image. Try a different one, or type it instead.");
-    } finally {
-      setThinking(false);
-    }
   }
 
   async function analyseText() {
@@ -143,7 +101,7 @@ export function AiDraftReview({
         setFailure(json.error ?? "Couldn't read that.");
         return;
       }
-      ingest(json, "text");
+      ingest(json);
     } catch {
       setFailure("No connection. Check your network and try again.");
     } finally {
@@ -199,7 +157,7 @@ export function AiDraftReview({
           body: JSON.stringify({
             localDate: date,
             meal,
-            entryMethod: source,
+            entryMethod: "text",
             foodName: r.useMatch && r.match ? r.match.name : r.name,
             foodId: r.useMatch && r.match ? r.match.foodId : null,
             gramsResolved: r.grams,
@@ -230,40 +188,11 @@ export function AiDraftReview({
     return (
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
         <p className="font-mono text-[11px] leading-relaxed text-zinc-500">
-          Snap the plate or just describe it. You&apos;ll get a draft to check and correct —
+          Type it the way you'd say it. You&apos;ll get a draft to check and correct —
           nothing is logged until you say so.
         </p>
 
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void analysePhoto(file);
-            e.target.value = "";
-          }}
-        />
-
-        <button
-          type="button"
-          disabled={thinking}
-          onClick={() => fileRef.current?.click()}
-          className="mt-4 flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl border border-hot-green bg-hot-green/10 font-mono text-[11px] uppercase tracking-widest text-neon-green transition-colors hover:bg-hot-green/20 disabled:opacity-60"
-        >
-          {thinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-          {thinking ? "Reading the plate" : "Take or choose a photo"}
-        </button>
-
-        <div className="my-4 flex items-center gap-3">
-          <span className="h-px flex-1 bg-edge" />
-          <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">or</span>
-          <span className="h-px flex-1 bg-edge" />
-        </div>
-
-        <label className="block">
+        <label className="mt-3 block">
           <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
             Describe it
           </span>
@@ -292,8 +221,8 @@ export function AiDraftReview({
         )}
 
         <p className="mt-4 font-mono text-[10px] leading-relaxed text-zinc-600">
-          Portion sizes from a photo are rough by nature. Treat every number here as an estimate
-          with a range, not a measurement.
+          Amounts you don&apos;t state are filled with a typical serving. Treat every number here
+          as an estimate until you&apos;ve checked it.
         </p>
       </div>
     );

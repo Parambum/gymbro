@@ -40,6 +40,9 @@ import { portionsFor } from "./fuel/portion-sets.mjs";
 const FOOD_MANIFESTS = [
   { path: "src/lib/data/fuel-foods.json", label: "USDA", rebuild: "npm run fuel:import" },
   { path: "src/lib/data/fuel-foods-india.json", label: "India (OFF)", rebuild: "npm run fuel:import:india" },
+  // Home-cooked Indian dishes (rajma, poha, kadhi…), which neither of the
+  // above carries. Also what the photo model resolves most Indian dishes to.
+  { path: "src/lib/data/fuel-foods-indb.json", label: "India (INDB)", rebuild: "npm run fuel:import:indb" },
 ];
 const args = process.argv.slice(2);
 const prune = args.includes("--prune");

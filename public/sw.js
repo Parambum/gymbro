@@ -26,8 +26,16 @@ self.addEventListener("activate", (event) => {
     (async () => {
       // Clear anything a previous worker cached, so this one cannot inherit
       // stale assets from an older strategy.
+      //
+      // The one exception is the on-device food model, which the page (not
+      // this worker) caches under a versioned name like
+      // "gymbro-model-food-v1". It is ~20 MB that never changes under that
+      // name, and deleting it here would make every app update re-download
+      // it. A new model ships under a new name, so the old one is still
+      // cleared — by version, not by accident.
       const names = await caches.keys();
-      await Promise.all(names.map((n) => caches.delete(n)));
+      const keep = new Set(["gymbro-model-food-v1"]);
+      await Promise.all(names.filter((n) => !keep.has(n)).map((n) => caches.delete(n)));
       await self.clients.claim();
     })(),
   );

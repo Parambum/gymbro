@@ -83,10 +83,13 @@ export type EntryMethod = (typeof ENTRY_METHODS)[number];
 
 /**
  * Where a food's nutrition numbers came from. This drives the "unverified"
- * badge in the UI: anything that isn't `ifct`, `usda` or `off` is a number a
- * human or a model supplied, and the UI must say so.
+ * badge in the UI: anything that isn't `ifct`, `indb`, `usda` or `off` is a
+ * number a human or a model supplied, and the UI must say so.
+ *
+ * `indb` is the Indian Nutrient Databank — home-cooked Indian recipes,
+ * computed from IFCT 2017 ingredient data (see lib/data/ATTRIBUTION.md).
  */
-export const FOOD_SOURCES = ["ifct", "usda", "off", "user", "ai", "recipe"] as const;
+export const FOOD_SOURCES = ["ifct", "indb", "usda", "off", "user", "ai", "recipe"] as const;
 export type FoodSource = (typeof FOOD_SOURCES)[number];
 
 export const VEG_FLAGS = ["veg", "nonveg", "egg", "unknown"] as const;

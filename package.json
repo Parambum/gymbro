@@ -13,6 +13,8 @@
     "test:watch": "vitest",
     "fuel:import": "node scripts/import-usda.mjs",
     "fuel:import:india": "node scripts/import-off-india.mjs",
+    "fuel:import:indb": "node scripts/import-indb.mjs",
+    "fuel:vision:classes": "node scripts/build-vision-classes.mjs",
     "fuel:seed": "node scripts/seed-fuel.mjs",
     "fuel:seed:prod": "node --env-file=.env.production.local scripts/seed-fuel.mjs"
   },
@@ -42,6 +44,7 @@
     "motion": "^12.4.7",
     "next": "^15.1.6",
     "next-auth": "^5.0.0-beta.25",
+    "onnxruntime-web": "1.30.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-leaflet": "^5.0.0",

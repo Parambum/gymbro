@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, Loader2, Plus, ScanLine, Search, Sparkles, X, Zap } from "lucide-react";
+import { ArrowLeft, Camera, Check, Loader2, Plus, ScanLine, Search, Sparkles, X, Zap } from "lucide-react";
 import { BarcodeScanner } from "./barcode-scanner";
 import { CreateFoodForm } from "./create-food-form";
 import { AiDraftReview } from "./ai-draft-review";
+import { SnapMeal, type DayContext } from "./snap-meal";
 import { useDialogA11y } from "./controls";
 import { entryMacrosFor } from "@/lib/fuel/log";
 import { resolveGrams } from "@/lib/fuel/portions";
@@ -40,7 +41,7 @@ export interface FoodResult {
   defaultPortion: { id: string; label: string; grams: number; kcal: number } | null;
 }
 
-type View = "search" | "portion" | "quick" | "scan" | "create" | "ai";
+export type View = "search" | "portion" | "quick" | "scan" | "create" | "ai" | "snap";
 
 const DEBOUNCE_MS = 180;
 
@@ -49,6 +50,7 @@ export function LogSheet({
   meal,
   date,
   initialView = "search",
+  day = null,
   onClose,
   onLogged,
 }: {
@@ -56,6 +58,8 @@ export function LogSheet({
   meal: Meal;
   date: string;
   initialView?: View;
+  /** Today's totals, so Snap can show what the day becomes before you say yes. */
+  day?: DayContext | null;
   onClose: () => void;
   onLogged: () => void;
 }) {
@@ -267,8 +271,10 @@ export function LogSheet({
           : view === "create"
             ? "New food"
             : view === "ai"
-              ? "Describe or snap it"
-              : MEAL_LABELS[meal];
+              ? "Describe it"
+              : view === "snap"
+                ? `Snap · ${MEAL_LABELS[meal]}`
+                : MEAL_LABELS[meal];
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center">
@@ -327,10 +333,11 @@ export function LogSheet({
                 />
               </div>
 
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                <Action icon={Camera} label="Snap" onClick={() => setView("snap")} />
                 <Action icon={ScanLine} label="Scan" onClick={() => setView("scan")} />
-                <Action icon={Sparkles} label="Snap / describe" onClick={() => setView("ai")} />
-                <Action icon={Zap} label="Quick add" onClick={() => setView("quick")} />
+                <Action icon={Sparkles} label="Describe" onClick={() => setView("ai")} />
+                <Action icon={Zap} label="Quick" onClick={() => setView("quick")} />
               </div>
             </div>
 
@@ -414,7 +421,24 @@ export function LogSheet({
           />
         )}
 
-        {/* ── AI draft (photo / natural language) ─────────────────── */}
+        {/* ── snap a meal (on-device food model) ───────────────────── */}
+        {view === "snap" && (
+          <SnapMeal
+            meal={meal}
+            date={date}
+            day={day}
+            onLogged={() => {
+              onLogged();
+              onClose();
+            }}
+            onSearch={(q) => {
+              setQuery(q);
+              setView("search");
+            }}
+          />
+        )}
+
+        {/* ── AI draft (natural language) ─────────────────────────── */}
         {view === "ai" && (
           <AiDraftReview
             meal={meal}
@@ -611,9 +635,9 @@ function Action({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-edge bg-void px-2 font-mono text-[10px] uppercase tracking-widest text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green"
+      className="flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl border border-edge bg-void px-1 font-mono text-[9px] uppercase tracking-widest text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-hot-green"
     >
-      <Icon className="h-3.5 w-3.5" />
+      <Icon className="h-4 w-4" />
       {label}
     </button>
   );
