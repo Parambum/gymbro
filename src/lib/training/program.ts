@@ -85,7 +85,10 @@ export function classifyEquipment(exercise: string): Equipment {
   ];
 
   if (needsGym.some((k) => n.includes(k))) return "full-gym";
-  if (n.includes("dumbbell") || n.includes("kettlebell")) return "dumbbells";
+  // "Weighted Pull-up" is a pull-up plus a load — not bodyweight, whatever the
+  // rest of the name says. A dumbbell between the feet or on the back loads
+  // every weighted movement in the catalog, so it needs dumbbells, not a gym.
+  if (n.includes("dumbbell") || n.includes("kettlebell") || n.includes("weighted")) return "dumbbells";
   if (bodyweight.some((k) => n.includes(k))) return "bodyweight";
   return "full-gym";
 }

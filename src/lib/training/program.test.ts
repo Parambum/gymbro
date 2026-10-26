@@ -30,7 +30,13 @@ describe("equipment inference", () => {
   it("lets the gym keyword win when a name contains both", () => {
     // "Smith Machine Flat Bench" is not a bodyweight bench
     expect(classifyEquipment("Smith Machine Flat Bench")).toBe("full-gym");
-    expect(classifyEquipment("Weighted Push-ups")).toBe("bodyweight");
+  });
+
+  it("does not offer a weighted movement to someone with no weights", () => {
+    // a weighted push-up is a push-up plus a load; a dumbbell supplies it
+    expect(classifyEquipment("Weighted Push-ups")).toBe("dumbbells");
+    expect(availableWith("Weighted Pull-up", "bodyweight")).toBe(false);
+    expect(availableWith("Weighted Pull-up", "dumbbells")).toBe(true);
   });
 
   it("assumes gym for anything unrecognised, which is the safe direction", () => {
