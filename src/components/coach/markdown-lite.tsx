@@ -3,16 +3,18 @@ import { Fragment, type ReactNode } from "react";
 /**
  * A deliberately tiny markdown renderer for coach replies.
  *
- * The system prompt constrains the model to exactly four constructs — `###`
- * day headings, `-` bullets, `**bold**` exercise names and short paragraphs —
- * so a full markdown dependency would be ~40kB of client JS to render four
- * rules. Anything it doesn't recognise falls through as plain text.
+ * The system prompt constrains the model to a handful of constructs — `###`
+ * day headings, `-` bullets, `**bold**` exercise names, short paragraphs, and
+ * `[title](https://…)` links in a research answer's Sources — so a full
+ * markdown dependency would be ~40kB of client JS for five rules. Anything it
+ * doesn't recognise falls through as plain text.
  */
 
 function inline(text: string, keyPrefix: string): ReactNode[] {
   const out: ReactNode[] = [];
-  // **bold** and `code`, scanned in one pass
-  const re = /(\*\*([^*]+)\*\*|`([^`]+)`)/g;
+  // **bold**, `code` and [text](https://…) — links only for the research
+  // sources, and only https, so a reply can never carry a javascript: URL
+  const re = /(\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\((https:\/\/[^\s)]+)\))/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -24,6 +26,18 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
         <strong key={`${keyPrefix}-b${i}`} className="font-bold text-zinc-100">
           {m[2]}
         </strong>,
+      );
+    } else if (m[4] !== undefined) {
+      out.push(
+        <a
+          key={`${keyPrefix}-a${i}`}
+          href={m[5]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-hot-purple underline decoration-hot-purple/40 underline-offset-2 hover:text-zinc-100"
+        >
+          {m[4]}
+        </a>,
       );
     } else {
       out.push(

@@ -1,5 +1,8 @@
 import { webScraper } from "@/lib/coach/web-scraper";
 import { DEFAULT_WINDOW_DAYS, trainingLogBrief } from "@/lib/coach/training-log";
+import { MIN_PASSAGE_COSINE, sourceLines } from "@/lib/coach/rag/compose";
+import { retrieve } from "@/lib/coach/rag/retrieve";
+import { loadKnowledgeBase } from "@/lib/coach/rag/store";
 
 /**
  * The coach's tool surface, defined once for every provider.
@@ -54,9 +57,55 @@ export const TRAINING_LOG = {
   },
 } as const;
 
+export const KNOWLEDGE_SEARCH = {
+  name: "knowledge_search",
+  description:
+    "Search GymBro's research library — open-access (CC BY) sports-science papers: ISSN " +
+    "position stands on protein, creatine, caffeine, nutrient timing, diets and supplements, " +
+    "and meta-analyses on volume, frequency, failure, rest intervals, deloading, cardio, " +
+    "stretching and sleep. Returns the most relevant passages, numbered, each with its " +
+    "citation. Use it for any evidence question before web_scraper, and cite what you use " +
+    "as [n] with a Sources list. If it reports no match, say the library has nothing on it.",
+  schema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "The question, in plain language",
+      },
+    },
+    required: ["query"],
+    additionalProperties: false,
+  },
+} as const;
+
 /** Which tools this turn may use. `training_log` needs a session behind it. */
 export function availableTools(userId: string | null) {
-  return userId ? [WEB_SCRAPER, TRAINING_LOG] : [WEB_SCRAPER];
+  return userId ? [KNOWLEDGE_SEARCH, WEB_SCRAPER, TRAINING_LOG] : [KNOWLEDGE_SEARCH, WEB_SCRAPER];
+}
+
+/**
+ * The library's passages for a model engine to reason over, numbered for
+ * citation. Below the confidence floor it says so plainly, which is what lets
+ * the model answer "the library has nothing on that" instead of improvising.
+ */
+async function knowledgeSearch(query: string): Promise<string> {
+  const kb = loadKnowledgeBase();
+  const { hits } = await retrieve(query, 5);
+  const relevant = hits.filter((h) => h.dense >= MIN_PASSAGE_COSINE - 0.04);
+  if (relevant.length === 0 || hits[0].dense < MIN_PASSAGE_COSINE) {
+    return `No passage in the research library matches "${query}". Tell the user the library has nothing on it; do not cite anything.`;
+  }
+
+  const order: number[] = [];
+  const blocks = relevant.map((h) => {
+    const p = kb.passages[h.passage];
+    if (!order.includes(p.source)) order.push(p.source);
+    const n = order.indexOf(p.source) + 1;
+    return `[${n}] (${p.section || "body"})\n${p.sentences.join(" ")}`;
+  });
+  const sources = order.map((s, i) => `[${i + 1}] ${sourceLines([{ n: i + 1, source: kb.sources[s] }])[0].replace(/^\[\d+\] /, "")}`);
+  return [...blocks, "", "SOURCES (copy the ones you cite, verbatim, under a 'Sources' heading):", ...sources].join("\n\n");
 }
 
 /**
@@ -79,6 +128,12 @@ export async function runCoachTool(
       if (!query.trim()) return "No query supplied — nothing to research.";
       const { text } = await webScraper(query);
       return text;
+    }
+
+    if (name === KNOWLEDGE_SEARCH.name) {
+      const query = typeof args.query === "string" ? args.query : "";
+      if (!query.trim()) return "No query supplied — nothing to search.";
+      return await knowledgeSearch(query);
     }
 
     if (name === TRAINING_LOG.name) {

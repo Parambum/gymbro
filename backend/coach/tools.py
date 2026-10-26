@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from langchain_core.tools import tool
 
+from coach.knowledge import knowledge_search_text
 from coach.scraper import scrape
 from coach.training_log import DEFAULT_WINDOW_DAYS, training_log_brief
 
@@ -24,6 +25,26 @@ def web_scraper(query: str) -> str:
         query: Search query, or a full http(s) URL to read directly.
     """
     return scrape(query)
+
+
+@tool
+def knowledge_search(query: str) -> str:
+    """Search GymBro's research library — open-access (CC BY) sports-science papers: ISSN
+    position stands on protein, creatine, caffeine, nutrient timing, diets and supplements,
+    and meta-analyses on volume, frequency, failure, rest intervals, deloading, cardio,
+    stretching and sleep. Returns the most relevant passages, numbered, each with its
+    citation. Use it for any evidence question before web_scraper, and cite what you use
+    as [n] with a Sources list. If it reports no match, say the library has nothing on it.
+
+    Args:
+        query: The question, in plain language.
+    """
+    if not query.strip():
+        return "No query supplied — nothing to search."
+    try:
+        return knowledge_search_text(query)
+    except Exception as err:  # a thrown tool kills the whole reply; report instead
+        return f"The knowledge_search tool failed ({err}). Continue without it and do not invent data."
 
 
 def make_training_log_tool(user_id: str):

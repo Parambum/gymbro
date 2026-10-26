@@ -119,7 +119,7 @@ src/
 │       ├── workouts                POST log set (PR check) · GET day
 │       ├── workouts/dates          GET days-with-logs (calendar dots)
 │       ├── analytics/{muscle,overview}   aggregation pipelines (e1RM series, radar)
-│       └── coach                   POST — AI coach turn (runs the TS agent, or proxies backend/)
+│       └── coach                   POST — AI coach turn (local RAG coach, Groq/Claude agent, or proxies backend/)
 │
 ├── components/
 │   ├── three/                      R3F: anatomy model, 9 muscle zones, 360° rig, bloom
@@ -133,6 +133,8 @@ src/
 ├── store/                          Zustand: anatomy (hover/select/camera) · session (logging)
 ├── lib/                            math · db/mongoose · auth-helpers · validation · date-utils
 │   └── coach/                      agent (tool runner) · web-scraper · training-log · prompt
+│       ├── rag/                    tokenizer · embedder · JATS reader · chunker · BM25 · retrieval · composer
+│       └── local/                  keyless coach: intent · slots · plans · log review · Ollama + grounding check
 └── components/coach/               chat widget + a 40-line markdown renderer
 ```
 
@@ -218,8 +220,49 @@ apart; the user id is always resolved server-side from the session, never taken
 from the browser. The Python service is documented in [backend/README.md](backend/README.md)
 and answers only with a shared `x-coach-token`.
 
-Without any model key the route returns 503 and the rest of the app is
-unaffected — the widget just reports that it needs one.
+### Without a key: the local RAG coach
+
+With no model key set (or `COACH_PROVIDER=local`), the route runs
+[lib/coach/local](src/lib/coach/local) — the same four modes plus the safety
+rule, carried out by code the app already trusts, with nothing to pay for and
+nothing that can invent a number:
+
+```
+message ─► intent (rules) ─┬─ safety       doctor line, no programming around it
+                           ├─ demo / plan  lib/training/program.ts (the guided setup's generator)
+                           ├─ my-training  real sets from Mongo → trends, coverage, next steps
+                           └─ research     hybrid retrieval ─► quoted, cited answer
+                                            BM25 + bge-small embeddings, fused by RRF
+                                            [optional] Ollama rephrases; kept only if every
+                                            number in it is in the quoted evidence
+```
+
+**The library** is 34 open-access papers — ISSN position stands (protein,
+creatine, caffeine, nutrient timing, diets, supplements) and meta-analyses
+(failure, rest, volume, frequency, deloads, cardio, stretching, sleep) — listed
+with full citations in [COACH-SOURCES.md](src/lib/data/COACH-SOURCES.md).
+`npm run coach:kb` fetches them from Europe PMC, **refuses anything not CC BY or
+CC0** (checked in the article XML *and* Europe PMC's metadata — CC BY-NC papers
+are excluded because GymBro may be sold), drops methods, tables and citation
+markers, cuts passages and embeds them. The output is committed, like the food
+database; the running app only embeds the question.
+
+**Embeddings run in-process**: bge-small-en-v1.5 (MIT, 34 MB int8 ONNX in
+`models/coach/`) on onnxruntime-web's WASM backend — the runtime the food model
+already uses — with a hand-written WordPiece tokenizer that matches Hugging
+Face's token-for-token (`npm run coach:verify`, and `tokenizer.test.ts`).
+`npm run coach:eval` checks retrieval against 25 lifter questions and 8
+off-topic ones, which must be refused rather than answered with something
+nearby.
+
+Groq and Claude get the same library as a `knowledge_search` tool and cite it
+the same way.
+
+| Script | Does |
+|---|---|
+| `npm run coach:kb` | rebuild the library from `scripts/coach/sources.json` |
+| `npm run coach:verify` | embedder vs the reference implementation |
+| `npm run coach:eval` | retrieval quality and refusal check |
 
 ## GymBro Fuel (nutrition module)
 

@@ -16,7 +16,10 @@
     "fuel:import:indb": "node scripts/import-indb.mjs",
     "fuel:vision:classes": "node scripts/build-vision-classes.mjs",
     "fuel:seed": "node scripts/seed-fuel.mjs",
-    "fuel:seed:prod": "node --env-file=.env.production.local scripts/seed-fuel.mjs"
+    "fuel:seed:prod": "node --env-file=.env.production.local scripts/seed-fuel.mjs",
+    "coach:kb": "tsx scripts/coach/build-kb.ts",
+    "coach:verify": "tsx scripts/coach/verify-embedder.ts",
+    "coach:eval": "tsx scripts/coach/eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.119.0",
@@ -66,6 +69,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.2.7"
   }

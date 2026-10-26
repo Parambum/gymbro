@@ -8,7 +8,7 @@ export interface CoachTurn {
 export interface CoachReply {
   reply: string;
   toolsUsed: string[];
-  /** which engine answered: "anthropic" | "groq" | "langgraph" */
+  /** which engine answered: "anthropic" | "groq" | "langgraph" | "local" | "local+ollama" */
   backend: string;
 }
 

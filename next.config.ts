@@ -4,9 +4,21 @@ const nextConfig: NextConfig = {
   transpilePackages: ["three"],
   // multiple lockfiles exist up-tree; pin tracing to this project
   outputFileTracingRoot: process.cwd(),
-  // the coach prompt is read from disk at runtime, so tracing has to ship it
+  // The coach reads these from disk at runtime, so tracing has to ship them:
+  // the prompt, the research library, the embedding model, and onnxruntime's
+  // Node build + WASM (imported by computed path, which the tracer cannot see).
   outputFileTracingIncludes: {
-    "/api/coach": ["./shared/coach/system-prompt.md"],
+    "/api/coach": [
+      "./shared/coach/system-prompt.md",
+      "./src/lib/data/coach-kb.json",
+      "./src/lib/data/coach-kb.bin",
+      "./models/coach/bge-small-en-v1.5/model_quantized.onnx",
+      "./models/coach/bge-small-en-v1.5/vocab.txt",
+      "./node_modules/onnxruntime-web/package.json",
+      "./node_modules/onnxruntime-web/dist/ort.node.min.mjs",
+      "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm",
+      "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs",
+    ],
   },
 
   /**

@@ -18,7 +18,7 @@ from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from coach.prompt import coach_system_prompt
-from coach.tools import make_training_log_tool, web_scraper
+from coach.tools import knowledge_search, make_training_log_tool, web_scraper
 
 MODEL = "claude-opus-5"
 GROQ_MODEL = "openai/gpt-oss-120b"
@@ -54,7 +54,7 @@ def build_coach_graph(user_id: str | None):
     global state — one race away from serving another lifter's training. The
     compile itself is cheap; the API call dominates.
     """
-    tools = [web_scraper]
+    tools = [knowledge_search, web_scraper]
     if user_id:
         tools.append(make_training_log_tool(user_id))
 

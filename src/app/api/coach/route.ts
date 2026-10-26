@@ -3,6 +3,7 @@ import { z } from "zod";
 import { currentUserId } from "@/lib/auth-helpers";
 import { runCoach } from "@/lib/coach/agent";
 import { runGroqCoach } from "@/lib/coach/groq-agent";
+import { runLocalCoach } from "@/lib/coach/local/agent";
 import type { CoachTurn } from "@/lib/coach/types";
 
 /**
@@ -12,11 +13,14 @@ import type { CoachTurn } from "@/lib/coach/types";
  *   COACH_BACKEND=ts      (default) run the agentic loop in this process
  *   COACH_BACKEND=python  proxy to the FastAPI + LangGraph service in backend/
  *
- * In `ts` mode COACH_PROVIDER picks the engine — "anthropic" or "groq". Unset,
- * it follows whichever key exists, so deployments only have to set a key.
+ * In `ts` mode COACH_PROVIDER picks the engine — "anthropic", "groq" or
+ * "local". Unset, it follows whichever key exists, and with no key at all it is
+ * "local": the keyless coach in lib/coach/local, which answers from the
+ * research library, the programme generator and the user's real log. The
+ * coach therefore always works; a key only changes who writes the prose.
  *
- * Both speak the same request/response shape and load the same system prompt,
- * so the widget cannot tell them apart — flipping one env var swaps the engine.
+ * All of them speak the same request/response shape, so the widget cannot tell
+ * them apart — flipping one env var swaps the engine.
  *
  * Auth is resolved *here*, in both modes: the user id is never accepted from
  * the client, and the Python service only trusts it because the call carries
@@ -45,18 +49,6 @@ export async function POST(req: Request) {
   const backend = process.env.COACH_BACKEND ?? "ts";
   const provider = resolveProvider();
 
-  // Only the process that actually calls a model needs a key: in python mode
-  // that is the LangGraph service, which checks for itself.
-  if (backend !== "python" && provider === null) {
-    return NextResponse.json(
-      {
-        error:
-          "No model key is set. Add GROQ_API_KEY (or ANTHROPIC_API_KEY) to enable the AI coach.",
-      },
-      { status: 503 },
-    );
-  }
-
   let parsed: z.infer<typeof BodySchema>;
   try {
     parsed = BodySchema.parse(await req.json());
@@ -75,7 +67,9 @@ export async function POST(req: Request) {
         ? await callPythonBackend(messages, userId)
         : provider === "groq"
           ? await runGroqCoach(messages, userId)
-          : await runCoach(messages, userId);
+          : provider === "anthropic"
+            ? await runCoach(messages, userId)
+            : await runLocalCoach(messages, userId);
     return NextResponse.json(result);
   } catch (err) {
     console.error("[coach] request failed:", err);
@@ -86,17 +80,18 @@ export async function POST(req: Request) {
 
 /**
  * Which engine answers. An explicit COACH_PROVIDER wins; otherwise follow the
- * key that exists, so a deployment enables the coach by setting one variable
- * and nothing else. Returns null when neither key is configured.
+ * key that exists. With no key — or COACH_PROVIDER pointing at a provider
+ * whose key is missing — the keyless local coach answers rather than nothing.
  */
-function resolveProvider(): "anthropic" | "groq" | null {
+function resolveProvider(): "anthropic" | "groq" | "local" {
   const explicit = process.env.COACH_PROVIDER?.toLowerCase();
-  if (explicit === "groq") return process.env.GROQ_API_KEY ? "groq" : null;
-  if (explicit === "anthropic") return process.env.ANTHROPIC_API_KEY ? "anthropic" : null;
+  if (explicit === "local") return "local";
+  if (explicit === "groq" && process.env.GROQ_API_KEY) return "groq";
+  if (explicit === "anthropic" && process.env.ANTHROPIC_API_KEY) return "anthropic";
 
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
   if (process.env.GROQ_API_KEY) return "groq";
-  return null;
+  return "local";
 }
 
 async function callPythonBackend(messages: CoachTurn[], userId: string | null) {

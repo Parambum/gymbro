@@ -125,3 +125,26 @@ The Snap-a-meal classifier. Built by `ml/food-vision/` (see its README).
     terms are non-commercial research and education only.
 - **What it knows:** 139 dishes. Anything else falls back to search, barcode
   or typing — the app says so rather than force a wrong label.
+
+## AI Coach research library — `coach-kb.json`, `coach-kb.bin`
+
+34 open-access sports-science articles, excerpted sentence by sentence. Each is
+listed with authors, journal, DOI and licence in
+[COACH-SOURCES.md](COACH-SOURCES.md), which the build writes.
+
+- **Licence:** CC BY (any version) or CC0 only. `npm run coach:kb` checks every
+  article twice — the licence element in its own JATS XML and Europe PMC's
+  licence metadata — and refuses the build if either disagrees. CC BY-NC
+  (non-commercial), BY-ND (no adaptation) and BY-SA (share-alike) are refused
+  on purpose; several strong papers are absent for that reason.
+- **Attribution:** the coach shows the paper's title, authors, year, licence
+  and a link under every answer that quotes it.
+- **Changes made** (CC BY requires saying so): text is excerpted by sentence;
+  in-text citation markers, tables, figures, methods and boilerplate sections
+  are removed.
+
+## Coach embedding model — `models/coach/bge-small-en-v1.5/`
+
+- **Model:** BAAI/bge-small-en-v1.5, **MIT**. The int8 ONNX export is
+  Xenova's (`Xenova/bge-small-en-v1.5`, same licence). Runs on the server via
+  onnxruntime-web (MIT).
