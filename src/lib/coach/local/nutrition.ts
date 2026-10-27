@@ -17,6 +17,13 @@ export interface DayIntake {
   notes: string[];
   items: number;
   meals: Meal[];
+  /** Who the user is, from the Fuel profile — for supplement doses and food advice. */
+  about?: {
+    goal: "lose" | "maintain" | "gain" | null;
+    dietPref: string | null;
+    weightKg: number | null;
+    birthDate: string | null;
+  };
 }
 
 const n = (v: number) => Math.round(v).toLocaleString("en-IN");

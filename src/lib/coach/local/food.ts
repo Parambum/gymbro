@@ -2,6 +2,7 @@ import { normalize, editDistanceWithin } from "@/lib/fuel/search";
 import { stem } from "@/lib/coach/rag/bm25";
 import type { FoodCandidate, PhraseMatch } from "@/lib/fuel/describe-server";
 import type { MacroTotals } from "@/lib/fuel/types";
+import { compareVerdict, profileLines, profileOf, type FoodGoal } from "./food-profile";
 
 /**
  * "apple", "calories in 2 eggs", "how much protein does 100g paneer have",
@@ -24,6 +25,18 @@ export interface FoodAsk {
   nutrient: Nutrient | null;
   /** They asked for nutrition outright, rather than just naming a food. */
   explicit: boolean;
+  /** "is paneer good for bulking" — the goal to judge the food against. */
+  goal?: FoodGoal | null;
+  /** Asked to judge the food ("is X healthy?") rather than for its numbers. */
+  judged?: boolean;
+}
+
+/** "bulking" → gain, "a cut" → lose; null when the words name no goal. */
+export function foodGoalIn(text: string): FoodGoal | null {
+  if (/\b(cut|cutting|fat loss|weight loss|losing|lose|diet|dieting|shred\w*|lean|deficit)\b/i.test(text)) return "lose";
+  if (/\b(bulk\w*|gain\w*|mass|size|surplus)\b/i.test(text)) return "gain";
+  if (/\b(maintain\w*|maintenance)\b/i.test(text)) return "maintain";
+  return null;
 }
 
 /** Every food reply carries this line, which is how "and 2 rotis" is read as a follow-up. */
@@ -117,6 +130,17 @@ export function readFoodAsk(message: string): FoodAsk | null {
     return { text: food, nutrient: nutrientOf(m[nIdx]), explicit: true };
   }
 
+  // is paneer healthy · is rice good for a cut · can I eat bananas while bulking
+  const judged =
+    text.match(/^(?:is|are)\s+(.+?)\s+(?:healthy|unhealthy|good|bad|ok|okay|fine|worth eating)(?:\s+(?:for|on|during|while)\s+(.+))?$/i) ??
+    text.match(/^(?:can|should)\s+i\s+(?:eat|have)\s+(.+?)(?:\s+(?:on|during|while|for|when)\s+(.+))?$/i);
+  if (judged) {
+    const food = judged[1].replace(/^(the|a|an)\s+/i, "");
+    if (food && !NOT_A_FOOD.test(food) && !isTraining(food) && !RESEARCH_TOPIC.test(food) && !ASKS.test(food) && food.split(/\s+/).length <= 5) {
+      return { text: food, nutrient: null, explicit: true, judged: true, goal: judged[2] ? foodGoalIn(judged[2]) : null };
+    }
+  }
+
   // Implicit: a short message that is only food.
   const described = mealDescription(text);
   const wordCount = described.split(/\s+/).length;
@@ -125,6 +149,34 @@ export function readFoodAsk(message: string): FoodAsk | null {
   if (ASKS.test(described) || isTraining(described) || RESEARCH_TOPIC.test(described)) return null;
   if (/\b(i|me|my|you|your)\b/i.test(described)) return null;
   return { text: described, nutrient: null, explicit: false };
+}
+
+export interface FoodCompare {
+  a: string;
+  b: string;
+  goal: FoodGoal | "protein" | null;
+}
+
+/** "apple vs banana", "rice or roti for weight loss", "which is better, paneer or tofu?". */
+export function readFoodCompare(message: string): FoodCompare | null {
+  const text = strip(message).toLowerCase();
+  const m =
+    text.match(/^(?:which is |what'?s |what is )(?:better|healthier|best)(?:\s+for\s+([^,:]+?))?[,:]?\s+(.+?)\s+or\s+(.+?)$/) ??
+    text.match(/^(.+?)\s+or\s+(.+?)[,]?\s+which is (?:better|healthier)(?:\s+for\s+(.+))?$/) ??
+    text.match(/^compare\s+(.+?)\s+(?:and|with|to|vs\.?)\s+(.+?)(?:\s+for\s+(.+))?$/) ??
+    text.match(/^(.+?)\s+(?:vs\.?|versus|v\/s|or|compared (?:to|with))\s+(.+?)(?:\s+for\s+(.+))?$/);
+  if (!m) return null;
+  // the first pattern puts the goal first
+  const [a, b, goalText] = m[0].match(/^(?:which is |what'?s |what is )/) ? [m[2], m[3], m[1]] : [m[1], m[2], m[3]];
+  const side = (s: string | undefined) => {
+    const t = (s ?? "").replace(/^(the|a|an)\s+/, "").trim();
+    return t && /[a-z]/.test(t) && t.split(/\s+/).length <= 4 && !NOT_A_FOOD.test(t) && !isTraining(t) && !RESEARCH_TOPIC.test(t) && !ASKS.test(t) ? t : null;
+  };
+  const left = side(a);
+  const right = side(b);
+  if (!left || !right) return null;
+  const goal = goalText ? (/\bprotein\b/.test(goalText) ? "protein" : foodGoalIn(goalText)) : null;
+  return { a: left, b: right, goal };
 }
 
 /** Plural and simple inflections fold together: "eggs" is "egg", "apples" is "apple". */
@@ -265,23 +317,49 @@ function macroLine(m: MacroTotals, lead: Nutrient | null, hideCalories: boolean)
 }
 
 function per100Line(f: FoodCandidate, hideCalories: boolean): string {
-  const p = f.per100g;
+  const p = f.per100g as FoodCandidate["per100g"] & { sugarG?: number; sodiumMg?: number };
   const bits = [
     hideCalories ? null : `${fmt(p.kcal)} kcal`,
     `${fmt(p.proteinG, " g")} protein`,
     `${fmt(p.carbsG, " g")} carbs`,
+    p.sugarG != null ? `${fmt(p.sugarG, " g")} sugar` : null,
     `${fmt(p.fatG, " g")} fat`,
     p.fiberG ? `${fmt(p.fiberG, " g")} fibre` : null,
+    p.sodiumMg != null ? `${fmt(p.sodiumMg, " mg")} sodium` : null,
   ].filter(Boolean);
   return bits.join(" · ");
 }
 
-export function foodReply(
-  ask: FoodAsk,
-  matches: PhraseMatch[],
-  unclear: string[],
-  opts: { hideCalories: boolean; signedIn: boolean },
-): string {
+export interface FoodReplyOptions {
+  /** Fuel's eyes-off mode: no calorie numbers anywhere. */
+  hideCalories: boolean;
+  signedIn: boolean;
+  /** The goal to judge the food against — asked about, or from the Fuel profile. */
+  goal?: FoodGoal | null;
+  /** The day's target, for "that's 5% of your calories". */
+  target?: { kcal: number; proteinG: number } | null;
+  /** Calories left today before this food, when anything is logged. */
+  remainingKcal?: number | null;
+}
+
+/** "That's 5% of your 2,200 kcal and 1% of your 140 g protein." */
+function forYouLines(m: MacroTotals, opts: FoodReplyOptions): string[] {
+  const t = opts.target;
+  if (!t || t.kcal <= 0) return [];
+  const pct = (v: number, of: number) => `${Math.round((v / of) * 100)}%`;
+  const lines = [
+    opts.hideCalories
+      ? `- **For you:** ${pct(m.proteinG, t.proteinG)} of your ${fmt(t.proteinG)} g protein target.`
+      : `- **For you:** ${pct(m.kcal, t.kcal)} of your ${fmt(t.kcal)} kcal and ${pct(m.proteinG, t.proteinG)} of your ${fmt(t.proteinG)} g protein for the day.`,
+  ];
+  if (!opts.hideCalories && opts.remainingKcal != null) {
+    const after = Math.round(opts.remainingKcal - m.kcal);
+    lines.push(after >= 0 ? `- After this you'd have **${fmt(after)} kcal** left today.` : `- This would put you **${fmt(-after)} kcal** over today's target.`);
+  }
+  return lines;
+}
+
+export function foodReply(ask: FoodAsk, matches: PhraseMatch[], unclear: string[], opts: FoodReplyOptions): string {
   const lines: string[] = [];
   const { hideCalories } = opts;
 
@@ -289,7 +367,9 @@ export function foodReply(
     const m = matches[0];
     lines.push(`**${m.food.name}** — ${portionText(m)}`);
     lines.push(`- ${macroLine(m.macros, ask.nutrient, hideCalories)}`);
-    lines.push(`- Per 100 g: ${per100Line(m.food, hideCalories)}`);
+    lines.push(...forYouLines(m.macros, opts));
+    lines.push("", "**Per 100 g**", `- ${per100Line(m.food, hideCalories)}`);
+    lines.push(...profileLines(m.food, m.portions, { hideCalories, goal: ask.goal ?? opts.goal ?? null }));
   } else {
     for (const m of matches) {
       lines.push(`- **${m.food.name}** (${portionText(m)}) — ${macroLine(m.macros, ask.nutrient, hideCalories)}`);
@@ -305,6 +385,7 @@ export function foodReply(
       { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
     );
     lines.push("", `**Total:** ${macroLine(total, ask.nutrient, hideCalories)}`);
+    lines.push(...forYouLines(total, opts));
   }
 
   if (unclear.length > 0) {
@@ -323,6 +404,44 @@ export function foodReply(
       ? `Want a different amount? Ask like **150 g ${matches[0].phrase.query}**. To log it, open **Fuel → Describe it** and type the same words.`
       : `Want a different amount? Ask like **150 g ${matches[0].phrase.query}**. Sign in and Fuel can log it for you.`,
   );
+  return lines.join("\n");
+}
+
+/** Two foods side by side: a serving of each, then per 100 g, then which wins for the goal. */
+export function compareReply(cmp: FoodCompare, a: PhraseMatch, b: PhraseMatch, opts: FoodReplyOptions): string {
+  const { hideCalories } = opts;
+  const pa = { name: a.food.name, pr: profileOf(a.food, a.portions) };
+  const pb = { name: b.food.name, pr: profileOf(b.food, b.portions) };
+  const p100 = (m: PhraseMatch) => m.food.per100g as FoodCandidate["per100g"] & { sugarG?: number };
+  const row = (label: string, get: (m: PhraseMatch) => number | undefined, unit: string) => {
+    const x = get(a);
+    const y = get(b);
+    return x == null || y == null ? null : `- ${label}: ${fmt(x, unit)} vs ${fmt(y, unit)}`;
+  };
+  const lines = [
+    `### ${a.food.name} vs ${b.food.name}`,
+    "",
+    "**A typical serving**",
+    `- **${a.food.name}** (${portionText(a)}) — ${macroLine(a.macros, null, hideCalories)}`,
+    `- **${b.food.name}** (${portionText(b)}) — ${macroLine(b.macros, null, hideCalories)}`,
+    "",
+    "**Per 100 g**",
+    ...[
+      hideCalories ? null : row("Calories", (m) => p100(m).kcal, " kcal"),
+      row("Protein", (m) => p100(m).proteinG, " g"),
+      row("Carbs", (m) => p100(m).carbsG, " g"),
+      row("Sugar", (m) => p100(m).sugarG, " g"),
+      row("Fat", (m) => p100(m).fatG, " g"),
+      row("Fibre", (m) => p100(m).fiberG, " g"),
+    ].filter((x): x is string => Boolean(x)),
+    "",
+    "**Which one**",
+  ];
+  const goal = cmp.goal ?? opts.goal ?? null;
+  // eyes-off mode: judge on protein, never on calories
+  lines.push(...compareVerdict(pa, pb, hideCalories && goal !== "protein" ? "protein" : goal === "maintain" ? null : goal));
+  const sources = [...new Set([a, b].map((m) => SOURCE_LABEL[m.food.source] ?? m.food.source))];
+  lines.push("", `*${FOOD_MARKER}: ${sources.join(", ")}.*`);
   return lines.join("\n");
 }
 

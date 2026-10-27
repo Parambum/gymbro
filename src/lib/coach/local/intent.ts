@@ -11,7 +11,8 @@
  * default for a question.
  */
 
-import { readFoodAsk } from "./food";
+import { readFoodAsk, readFoodCompare } from "./food";
+import { readSupplementAsk } from "./supplements";
 
 export type Intent =
   | "safety"
@@ -22,6 +23,8 @@ export type Intent =
   | "my-training"
   | "my-nutrition"
   | "food"
+  | "food-compare"
+  | "supplements"
   | "research";
 
 /** Symptoms and injuries: any mention gets the doctor line, whoever it is about. */
@@ -91,8 +94,13 @@ export function classify(message: string, previousAssistant: string | null, hasP
   if (MY_TRAINING.test(text)) return "my-training";
   // Only questions that name a nutrient: a bare food ("apple") needs the food
   // database to tell it from a word the coach doesn't know, so the agent
-  // decides that one.
-  if (readFoodAsk(text)?.explicit) return "food";
+  // decides that one. A nutrient question about a supplement ("calories in
+  // whey") is still a food question; "is ashwagandha good?" is not.
+  const food = readFoodAsk(text);
+  if (food?.explicit && !food.judged) return "food";
+  if (readSupplementAsk(text)) return "supplements";
+  if (food?.judged) return "food";
+  if (readFoodCompare(text)) return "food-compare";
 
   if (words <= 4 && GREETING.test(text)) return "greeting";
   if ((words <= 5 && THANKS.test(text)) || THANKS_EMOJI.test(text)) return "thanks";

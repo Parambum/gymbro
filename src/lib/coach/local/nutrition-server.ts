@@ -51,5 +51,11 @@ export async function loadDayIntake(userId: string, date: string): Promise<DayIn
     notes: day?.notes ?? [],
     items: entries.length,
     meals: [...new Set(entries.map((e) => e.meal as Meal))],
+    about: {
+      goal: (profile?.goal as "lose" | "maintain" | "gain" | undefined) ?? null,
+      dietPref: profile?.dietPref ?? null,
+      weightKg: bundle.weightKg,
+      birthDate: profile?.birthDate ?? null,
+    },
   };
 }

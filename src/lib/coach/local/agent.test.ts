@@ -89,7 +89,7 @@ describe("unclear messages", () => {
     for (const m of ["asdkjh", "lkj lkj lkj", "???"]) {
       const r = await ask(m);
       expect(r.reply, m).toMatch(/not sure what you mean|What are you trying to find out/);
-      expect(r.reply, m).toContain("Look up a food");
+      expect(r.reply, m).toContain("Any food, in depth");
     }
   });
 

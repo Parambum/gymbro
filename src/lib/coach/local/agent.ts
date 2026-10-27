@@ -8,11 +8,22 @@ import { matchDescription } from "@/lib/fuel/describe-server";
 import { visibleTo } from "@/lib/fuel/food-pool";
 import { isFuelEnabled } from "@/lib/fuel/flag";
 import { todayIso } from "@/lib/date-utils";
-import { FuelProfile } from "@/models/FuelProfile";
 import { classify, isFollowUp, wantsMore, PLAN_MARKER, QUESTIONNAIRE_MARKER } from "./intent";
-import { FOOD_MATCHING, FOOD_MARKER, foodReply, noFoodReply, readFoodAsk, type FoodAsk } from "./food";
-import { asksForTarget, intakeReply } from "./nutrition";
+import {
+  FOOD_MATCHING,
+  FOOD_MARKER,
+  compareReply,
+  foodReply,
+  noFoodReply,
+  readFoodAsk,
+  readFoodCompare,
+  type FoodAsk,
+  type FoodCompare,
+  type FoodReplyOptions,
+} from "./food";
+import { asksForTarget, intakeReply, type DayIntake } from "./nutrition";
 import { loadDayIntake } from "./nutrition-server";
+import { goalIn, plantBasedIn, readSupplementAsk, supplementReply, weightIn, type SupplementContext } from "./supplements";
 import { assessClarity, type Clarity } from "./understand";
 import { reviewLog } from "./log-review";
 import { ollamaEnabled, polishWithOllama } from "./ollama";
@@ -42,10 +53,11 @@ export const SAFETY_LINE =
   "Please talk to a doctor or physical therapist before you keep training with this — pain, injury and medical conditions need someone who can examine you, and I won't program around them.";
 
 const ABILITIES = [
-  "- **Look up a food** — *calories in 2 eggs*, *protein in 200 g paneer*, or just *apple*",
-  "- **Answer a training or nutrition question** from research — *how much protein do I need?*",
-  "- **Build you a plan** — *build my plan*",
-  "- **Read your logs** — *how am I doing?* or *how many calories have I got left?*",
+  "- **Any food, in depth** — *apple*, *calories in 2 eggs*, *is paneer good for bulking?*, *rice vs roti for a cut*",
+  "- **Supplements** — *what supplements should I take?*, *how much creatine?*, *are BCAAs worth it?*",
+  "- **Training and nutrition questions** from research — *how long should I rest between sets?*",
+  "- **A plan built for you** — *build my plan*",
+  "- **Your logs** — *how am I doing?* or *how many calories have I got left?*",
 ].join("\n");
 
 const NO_RESEARCH = [
@@ -91,29 +103,95 @@ function lastFoodQuestion(messages: CoachTurn[], before: number): string | null 
 }
 
 /**
+ * The signed-in user's day and profile, or null. A failure here only costs the
+ * personal lines of a reply, never the reply.
+ */
+async function userDay(userId: string | null, date: string, toolsUsed: string[]): Promise<DayIntake | null> {
+  if (!userId || !isFuelEnabled()) return null;
+  try {
+    const day = await loadDayIntake(userId, date);
+    toolsUsed.push("fuel_log");
+    return day;
+  } catch (err) {
+    console.error("[coach] fuel profile read failed:", err);
+    return null;
+  }
+}
+
+function foodOptions(day: DayIntake | null, signedIn: boolean): FoodReplyOptions {
+  const t = day?.target ?? null;
+  return {
+    hideCalories: Boolean(day?.eyesOff),
+    signedIn,
+    goal: day?.about?.goal ?? null,
+    target: t ? { kcal: t.kcal, proteinG: t.proteinG } : null,
+    remainingKcal: t && day && day.items > 0 ? t.kcal - day.consumed.kcal : null,
+  };
+}
+
+/**
  * Answer a food question from the database, or null to let the message go on
  * to research — an implicit ask ("car") that matches nothing was probably
  * not about food.
  */
-async function foodAnswer(ask: FoodAsk, userId: string | null, toolsUsed: string[]): Promise<string | null> {
+async function foodAnswer(ask: FoodAsk, userId: string | null, date: string, toolsUsed: string[]): Promise<string | null> {
   if (!isFuelEnabled()) {
     return ask.explicit ? "Food lookups are switched off on this server, so I can't give you numbers for that." : null;
   }
   try {
     await connectDB();
-    toolsUsed.push("food_lookup");
-    const [{ matches, unclear }, profile] = await Promise.all([
+    const [{ matches, unclear }, day] = await Promise.all([
       matchDescription(ask.text, visibleTo(userId), FOOD_MATCHING),
-      userId ? FuelProfile.findOne({ userId }).select({ eyesOffMode: 1 }).lean() : null,
+      userDay(userId, date, toolsUsed),
     ]);
+    toolsUsed.push("food_lookup");
     if (matches.length === 0) return ask.explicit ? noFoodReply(ask) : null;
     // "apple asdfgh" is still about the apple; "the car park" is not about carrots
     if (!ask.explicit && unclear.length > matches.length) return null;
-    return foodReply(ask, matches, unclear, { hideCalories: Boolean(profile?.eyesOffMode), signedIn: Boolean(userId) });
+    return foodReply(ask, matches, unclear, foodOptions(day, Boolean(userId)));
   } catch (err) {
     console.error("[coach] food lookup failed:", err);
     return ask.explicit ? "I can't reach the food database right now, so I can't give you numbers for that. Try again in a minute." : null;
   }
+}
+
+async function compareAnswer(cmp: FoodCompare, userId: string | null, date: string, toolsUsed: string[]): Promise<string> {
+  if (!isFuelEnabled()) return "Food lookups are switched off on this server, so I can't compare those.";
+  try {
+    await connectDB();
+    const [left, right, day] = await Promise.all([
+      matchDescription(cmp.a, visibleTo(userId), FOOD_MATCHING),
+      matchDescription(cmp.b, visibleTo(userId), FOOD_MATCHING),
+      userDay(userId, date, toolsUsed),
+    ]);
+    toolsUsed.push("food_lookup");
+    const missing = [left.matches[0] ? null : cmp.a, right.matches[0] ? null : cmp.b].filter(Boolean);
+    if (missing.length) {
+      return `I couldn't find ${missing.map((m) => `**${m}**`).join(" or ")} in the food database, so I can't compare them fairly. Try a simpler name, like "rice" or "roti".`;
+    }
+    return compareReply(cmp, left.matches[0], right.matches[0], foodOptions(day, Boolean(userId)));
+  } catch (err) {
+    console.error("[coach] food comparison failed:", err);
+    return "I can't reach the food database right now, so I can't compare those. Try again in a minute.";
+  }
+}
+
+/** What the coach knows about the person, for supplement doses and advice. */
+function supplementContext(messages: CoachTurn[], message: string, day: DayIntake | null): SupplementContext {
+  const said = messages.filter((m) => m.role === "user").map((m) => m.content);
+  const stated = weightIn(said);
+  const fromLog = day?.about?.weightKg ?? null;
+  const birth = day?.about?.birthDate;
+  const age = birth ? (Date.now() - Date.parse(birth)) / (365.25 * 24 * 3600 * 1000) : null;
+  const profileGoal = day?.about?.goal === "lose" ? "fat-loss" : day?.about?.goal ? "muscle" : null;
+  return {
+    weightKg: stated ?? fromLog,
+    weightFrom: stated ? "message" : fromLog ? "log" : null,
+    plantBased: said.some((s) => plantBasedIn(s.toLowerCase())) || ["veg", "vegan", "jain"].includes(day?.about?.dietPref ?? ""),
+    goal: goalIn(message.toLowerCase()) ?? profileGoal,
+    minor: age != null && age < 18,
+    proteinTargetG: day?.target?.proteinG ?? null,
+  };
 }
 
 function lastUserIndex(messages: CoachTurn[]): number {
@@ -205,6 +283,7 @@ export async function runLocalCoach(
   const hasPlanDetail = Boolean(detail.goal || detail.experience || detail.equipment || detail.daysPerWeek || detail.sessionMinutes);
   const intent = classify(message, prior, hasPlanDetail);
   const toolsUsed: string[] = [];
+  const date = ctx.localDate ?? todayIso();
   let backend = "local";
 
   const reply = (text: string): CoachReply => ({ reply: note ? `${note}\n\n${text}` : text, toolsUsed, backend });
@@ -277,13 +356,30 @@ export async function runLocalCoach(
       if (!isFuelEnabled()) return reply("Fuel is switched off on this server, so there's no food log for me to read.");
       try {
         toolsUsed.push("fuel_log");
-        const intake = await loadDayIntake(userId, ctx.localDate ?? todayIso());
+        const intake = await loadDayIntake(userId, date);
         return reply(intakeReply(intake, asksForTarget(message) ? "target" : "today"));
       } catch (err) {
         console.error("[coach] fuel log read failed:", err);
         return reply("I can't reach your food log right now — try again in a minute.");
       }
     }
+
+    case "supplements": {
+      const ask = readSupplementAsk(message)!;
+      let kb: ReturnType<typeof loadKnowledgeBase>;
+      try {
+        kb = loadKnowledgeBase();
+      } catch (err) {
+        console.error("[coach] research library failed:", err);
+        return reply(RESEARCH_DOWN);
+      }
+      toolsUsed.push("knowledge_search");
+      const day = await userDay(userId, date, toolsUsed);
+      return reply(supplementReply(ask, supplementContext(messages, message, day), kb));
+    }
+
+    case "food-compare":
+      return reply(await compareAnswer(readFoodCompare(message)!, userId, date, toolsUsed));
 
     case "food": {
       let ask = readFoodAsk(message)!;
@@ -292,7 +388,7 @@ export async function runLocalCoach(
         const previous = lastFoodQuestion(messages, at);
         if (previous) ask = { ...ask, text: previous };
       }
-      return reply((await foodAnswer(ask, userId, toolsUsed)) ?? noFoodReply(ask));
+      return reply((await foodAnswer(ask, userId, date, toolsUsed)) ?? noFoodReply(ask));
     }
 
     case "research": {
@@ -300,7 +396,7 @@ export async function runLocalCoach(
       if (prior?.includes(FOOD_MARKER)) {
         const more = message.trim().match(/^(?:and|also|plus|add|with|what about|how about)\s+(.+?)[?.!]*$/i);
         if (more) {
-          const text = await foodAnswer({ text: more[1], nutrient: null, explicit: true }, userId, toolsUsed);
+          const text = await foodAnswer({ text: more[1], nutrient: null, explicit: true }, userId, date, toolsUsed);
           if (text) return reply(text);
         }
       }
@@ -308,7 +404,7 @@ export async function runLocalCoach(
       // A message that is only food — "apple", "2 roti and dal".
       const implicit = readFoodAsk(message);
       if (implicit && !implicit.explicit && !isFollowUp(message)) {
-        const text = await foodAnswer(implicit, userId, toolsUsed);
+        const text = await foodAnswer(implicit, userId, date, toolsUsed);
         if (text) return reply(text);
       }
 

@@ -91,7 +91,7 @@ export function toCandidate(f: Record<string, unknown>) {
     aliases: (f.aliases as string[]) ?? [],
     isVerified: Boolean(f.isVerified),
     popularity: Number(f.popularity ?? 0),
-    per100g: f.per100g as { kcal: number; proteinG: number; carbsG: number; fatG: number; fiberG: number },
+    per100g: f.per100g as { kcal: number; proteinG: number; carbsG: number; fatG: number; fiberG: number; sugarG?: number; sodiumMg?: number },
     vegFlag: f.vegFlag as string,
     source: f.source as string,
   };

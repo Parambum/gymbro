@@ -14,7 +14,7 @@ describe("classify", () => {
     expect(classify("I felt dizzy after deadlifts", null)).toBe("safety");
   });
   it("treats conditions as research when they are not the user's own", () => {
-    expect(classify("does creatine cause kidney damage?", null)).toBe("research");
+    expect(classify("does creatine cause kidney damage?", null)).toBe("supplements");
   });
   it("does not trip on gym idioms", () => {
     expect(classify("will skipping cardio hurt my gains?", null)).toBe("research");
@@ -32,7 +32,7 @@ describe("classify", () => {
   it("treats a questionnaire answer as a plan turn, and a new question as a question", () => {
     const q = `${QUESTIONNAIRE_MARKER}, tell me:`;
     expect(classify("build muscle, beginner, gym, 4 days", q)).toBe("plan");
-    expect(classify("wait, how much protein should I eat?", q)).toBe("research");
+    expect(classify("wait, how much protein should I eat?", q)).toBe("supplements");
   });
   it("rebuilds a plan when a tweak follows it", () => {
     expect(classify("make it 5 days", `...\n${PLAN_MARKER}\n...`, true)).toBe("plan");
@@ -41,7 +41,7 @@ describe("classify", () => {
   it("recognises greetings and thanks only when short", () => {
     expect(classify("hey", null)).toBe("greeting");
     expect(classify("thanks!", null)).toBe("thanks");
-    expect(classify("hey how much creatine should I take each day", null)).toBe("research");
+    expect(classify("hey how much creatine should I take each day", null)).toBe("supplements");
   });
 });
 

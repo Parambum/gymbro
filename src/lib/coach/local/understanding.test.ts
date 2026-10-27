@@ -24,11 +24,9 @@ describe("classify — food and the user's own eating", () => {
 
   it("keeps questions about people, goals and amounts per day as research", () => {
     for (const q of [
-      "how much protein should I eat?",
       "how much protein for muscle gain",
       "protein for vegetarians",
       "what are the macros for bulking",
-      "does creatine cause kidney damage?",
     ]) {
       expect(classify(q, null), q).toBe("research");
     }
@@ -134,7 +132,7 @@ describe("foodReply", () => {
     const { matches, unclear } = await match("apple");
     const text = foodReply({ text: "apple", nutrient: null, explicit: false }, matches, unclear, { hideCalories: false, signedIn: true });
     expect(text).toMatch(/\*\*\d+(\.\d)? kcal\*\*/);
-    expect(text).toContain("Per 100 g:");
+    expect(text).toContain("**Per 100 g**");
     expect(text).toContain(FOOD_MARKER);
     expect(text).toContain("USDA FoodData Central");
   });
