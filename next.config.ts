@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   // The coach reads these from disk at runtime, so tracing has to ship them:
   // the prompt, the research library, the embedding model, and onnxruntime's
   // Node build + WASM (imported by computed path, which the tracer cannot see).
+  // Being invisible to the tracer, the Node build's own dependency is too:
+  // ort.node.min.mjs imports `onnxruntime-common`, and without it every
+  // research answer in production failed with "Cannot find package".
   outputFileTracingIncludes: {
     "/api/coach": [
       "./shared/coach/system-prompt.md",
@@ -18,6 +21,8 @@ const nextConfig: NextConfig = {
       "./node_modules/onnxruntime-web/dist/ort.node.min.mjs",
       "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm",
       "./node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs",
+      "./node_modules/onnxruntime-common/package.json",
+      "./node_modules/onnxruntime-common/dist/esm/**/*.js",
     ],
   },
 
