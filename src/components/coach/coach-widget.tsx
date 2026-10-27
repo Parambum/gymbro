@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Loader2, MessageSquareDashed, Send, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { todayIso } from "@/lib/date-utils";
 import { MarkdownLite } from "./markdown-lite";
 
 /**
@@ -22,6 +23,7 @@ interface Turn {
 const OPENERS = [
   { label: "Show me a demo", prompt: "Show me what you can do — give me a demo." },
   { label: "Build my plan", prompt: "Build me a custom A-Z workout plan." },
+  { label: "Calories in a food", prompt: "How many calories are in 2 eggs and a banana?" },
 ] as const;
 
 const SIGNED_IN_OPENER = {
@@ -74,7 +76,8 @@ export function CoachWidget({ signedIn }: { signedIn: boolean }) {
         headers: { "content-type": "application/json" },
         // only the last 20 turns travel — enough to hold the questionnaire, and
         // it keeps a long session from growing the request without bound
-        body: JSON.stringify({ messages: next.slice(-20) }),
+        // localDate: "today" in the food log is the user's day, not the server's
+        body: JSON.stringify({ messages: next.slice(-20), localDate: todayIso() }),
       });
       const data = (await res.json()) as { reply?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Request failed (" + res.status + ")");

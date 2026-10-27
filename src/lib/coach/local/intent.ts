@@ -11,6 +11,8 @@
  * default for a question.
  */
 
+import { readFoodAsk } from "./food";
+
 export type Intent =
   | "safety"
   | "greeting"
@@ -18,6 +20,8 @@ export type Intent =
   | "demo"
   | "plan"
   | "my-training"
+  | "my-nutrition"
+  | "food"
   | "research";
 
 /** Symptoms and injuries: any mention gets the doctor line, whoever it is about. */
@@ -34,6 +38,7 @@ const FIRST_PERSON = /\b(i|i'm|im|i've|ive|i am|my|me|mine)\b/i;
 
 const GREETING = /^(hi|hey|hello|hiya|yo|sup|howdy|namaste|good (morning|afternoon|evening))\b/i;
 const THANKS = /^(thanks|thank you|thx|ty|cheers|great|awesome|nice|cool|perfect|ok|okay|got it|appreciate it)\b/i;
+const THANKS_EMOJI = /^(?:\p{Extended_Pictographic}|️|\s)+$/u;
 
 const DEMO = /\b(demo|show me what you can do|what can you do|sample (plan|workout|program|programme|routine|week)|example (plan|workout|program|programme|routine|week))\b/i;
 
@@ -42,6 +47,14 @@ const PLAN =
 
 const MY_TRAINING =
   /\b(my (training|progress|log|logs|lifts?|workouts?|sessions?|numbers|week|month|bench|squat|deadlift|strength|history|stats)|how am i doing|how'?s my|am i (progressing|improving|getting stronger|on track)|what should i (train|do|work on) today|weak (point|spot|link)s?|weakest|lagging|what am i (missing|neglecting|skipping)|(analy[sz]e|review|check|look at) my)\b/i;
+
+/**
+ * The user's own eating, from their Fuel log and targets — "how many calories
+ * have I got left?", "my protein today", "what's my calorie target?". Asking
+ * what a *food* contains is a different route (lib/coach/local/food.ts).
+ */
+const MY_NUTRITION =
+  /\b(my (calories|calorie|macros?|protein|carbs|fats?|intake|nutrition|food log|food today|meals today|eating today)|(calories|protein|macros|carbs|fat|kcal) (today|so far|left|remaining|to go)|how (much|many) (protein|calories|carbs|fat|kcal) (have i|did i|i've|i have) (eaten|had|consumed|logged|got left|left)|how (much|many) (protein|calories|carbs|fat|kcal) (do i have|have i got) (left|remaining)|what('s| is) my (calorie|protein|macro|daily|food) (target|goal|budget)s?|how many calories (should|do) i (eat|need|have)|(calorie|protein|macro) (target|goal|budget)|what did i eat|what should i eat (today|now|next|for (breakfast|lunch|dinner|a snack))|am i (on track|over|under) (with|on|for) (my )?(calories|protein|macros|food|diet))\b/i;
 
 /** The questionnaire's opening line, which marks a plan conversation in progress. */
 export const QUESTIONNAIRE_MARKER = "To build it around you";
@@ -74,10 +87,15 @@ export function classify(message: string, previousAssistant: string | null, hasP
 
   if (DEMO.test(text)) return "demo";
   if (PLAN.test(text)) return "plan";
+  if (MY_NUTRITION.test(text)) return "my-nutrition";
   if (MY_TRAINING.test(text)) return "my-training";
+  // Only questions that name a nutrient: a bare food ("apple") needs the food
+  // database to tell it from a word the coach doesn't know, so the agent
+  // decides that one.
+  if (readFoodAsk(text)?.explicit) return "food";
 
   if (words <= 4 && GREETING.test(text)) return "greeting";
-  if (words <= 5 && THANKS.test(text)) return "thanks";
+  if ((words <= 5 && THANKS.test(text)) || THANKS_EMOJI.test(text)) return "thanks";
 
   return "research";
 }

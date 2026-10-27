@@ -8,7 +8,7 @@ import { Activity } from "@/models/Activity";
 import { fuelGuard, loadProfileBundle } from "@/lib/fuel/server";
 import { groupByMeal, loggingStreak, totalsFor } from "@/lib/fuel/log";
 import { remainingFor } from "@/lib/fuel/targets";
-import { cycleTarget, exerciseKcal } from "@/lib/fuel/bridge";
+import { targetForDay } from "@/lib/fuel/bridge";
 import { TRAINING_DAY_WATER_BONUS_ML, type Meal } from "@/lib/fuel/types";
 import { isValidIso, todayIso, addDaysIso } from "@/lib/date-utils";
 import { groupBySlug } from "@/lib/data/exercise-catalog";
@@ -88,28 +88,18 @@ export async function GET(req: Request) {
     const meals = groupByMeal(entries);
 
     // ── §8: adjust the day's target for training ────────────────────
-    const bridgeNotes: string[] = [];
-    let target = bundle.target;
-
-    if (target && bundle.profile.calorieCyclingEnabled) {
-      const cycled = cycleTarget(target, bundle.trainedOnDate, (trainingDates as string[]).length);
-      if (cycled.note) bridgeNotes.push(cycled.note);
-      target = { ...target, ...cycled };
-    }
-
-    let exerciseAddedKcal = 0;
-    if (target && bundle.profile.exerciseCaloriesEnabled && bundle.weightKg) {
-      exerciseAddedKcal = exerciseKcal(
-        activities.map((a) => ({ type: String(a.type), distanceM: Number(a.distanceM) })),
-        bundle.weightKg,
-      );
-      if (exerciseAddedKcal > 0) {
-        target = { ...target, kcal: target.kcal + exerciseAddedKcal };
-        bridgeNotes.push(
-          `+${exerciseAddedKcal} kcal added back from today's cardio. This is a rough estimate from distance and bodyweight, and it's the commonest way to eat more than you meant to.`,
-        );
-      }
-    }
+    const day = bundle.target
+      ? targetForDay(bundle.target, {
+          calorieCycling: Boolean(bundle.profile.calorieCyclingEnabled),
+          exerciseCalories: Boolean(bundle.profile.exerciseCaloriesEnabled),
+          isTrainingDay: bundle.trainedOnDate,
+          trainingDaysLast7: (trainingDates as string[]).length,
+          activities: activities.map((a) => ({ type: String(a.type), distanceM: Number(a.distanceM) })),
+          weightKg: bundle.weightKg,
+        })
+      : null;
+    const target = day?.target ?? null;
+    const bridgeNotes = day?.notes ?? [];
 
     // §5.4 — the training water bonus is applied on read, not baked into the
     // stored target, because a day can become a training day hours later.

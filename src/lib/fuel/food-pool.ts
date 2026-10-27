@@ -19,7 +19,9 @@ const FUZZY_POOL_SIZE = 300;
 
 export type Visible = { $or: Array<Record<string, unknown>> };
 
-export function visibleTo(userId: string): Visible {
+/** Public foods, plus the user's own custom foods when someone is signed in. */
+export function visibleTo(userId: string | null): Visible {
+  if (!userId) return { $or: [{ ownerUserId: null }] };
   return { $or: [{ ownerUserId: null }, { ownerUserId: new Types.ObjectId(userId) }] };
 }
 

@@ -228,14 +228,31 @@ rule, carried out by code the app already trusts, with nothing to pay for and
 nothing that can invent a number:
 
 ```
-message ─► intent (rules) ─┬─ safety       doctor line, no programming around it
-                           ├─ demo / plan  lib/training/program.ts (the guided setup's generator)
-                           ├─ my-training  real sets from Mongo → trends, coverage, next steps
-                           └─ research     hybrid retrieval ─► quoted, cited answer
-                                            BM25 + bge-small embeddings, fused by RRF
-                                            [optional] Ollama rephrases; kept only if every
-                                            number in it is in the quoted evidence
+message ─► intent (rules) ─┬─ safety        doctor line, no programming around it
+                           ├─ demo / plan   lib/training/program.ts (the guided setup's generator)
+                           ├─ my-training   real sets from Mongo → trends, coverage, next steps
+                           ├─ my-nutrition  today's Fuel log vs the day's target (same maths as Today)
+                           ├─ food          the food database, through Fuel's own matcher
+                           ├─ unclear       "what are you trying to ask?" — never a guess
+                           └─ research      hybrid retrieval ─► quoted, cited answer
+                                             BM25 + bge-small embeddings, fused by RRF
+                                             [optional] Ollama rephrases; kept only if every
+                                             number in it is in the quoted evidence
 ```
+
+**Foods.** "apple", "calories in 2 eggs", "protein in 200 g paneer" or "I had
+2 roti and dal" are answered from the food database with Fuel's "Describe it"
+matcher (`matchDescription`), made stricter for a chat: every word must be a
+word of the food ("car" is not carrots), plain verified food beats branded
+packs and variants ("Bananas, raw", not "Banana chips"), and the commonest
+staples are pinned to one reviewed row each (`CANONICAL_FOODS` in
+[food.ts](src/lib/coach/local/food.ts)). No match, no number. Eyes-off mode
+hides calories here as it does on every screen.
+
+**Unclear messages.** A message that is mostly words neither the embedding
+model's vocabulary nor the gym/nutrition/Hinglish lists know ("asdkjh") gets a
+question back. A typo with exactly one sensible reading ("protien",
+"calries") is read that way and the reply says so.
 
 **The library** is 34 open-access papers — ISSN position stands (protein,
 creatine, caffeine, nutrient timing, diets, supplements) and meta-analyses

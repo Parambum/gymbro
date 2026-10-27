@@ -126,6 +126,51 @@ export function exerciseKcal(activities: readonly BurnableActivity[], weightKg: 
   return Math.round(total);
 }
 
+// ── the day's target, with both of the above applied ────────────────
+
+/**
+ * The target a given day is actually judged against: the stored target, then
+ * calorie cycling and cardio added back — each only behind its own toggle.
+ *
+ * The Today screen and the coach both read the day through this, so "how many
+ * calories have I got left?" in the chat and the ring on the screen cannot
+ * disagree.
+ */
+export function targetForDay<T extends { kcal: number; proteinG: number; carbsG: number; fatG: number }>(
+  base: T,
+  day: {
+    calorieCycling: boolean;
+    exerciseCalories: boolean;
+    isTrainingDay: boolean;
+    /** Sessions in the 7 days ending on this one — what cycling divides by. */
+    trainingDaysLast7: number;
+    activities: readonly BurnableActivity[];
+    weightKg: number | null;
+  },
+): { target: T & Partial<CycledTarget>; notes: string[]; exerciseAddedKcal: number } {
+  const notes: string[] = [];
+  let target: T & Partial<CycledTarget> = base;
+
+  if (day.calorieCycling) {
+    const cycled = cycleTarget(target, day.isTrainingDay, day.trainingDaysLast7);
+    if (cycled.note) notes.push(cycled.note);
+    target = { ...target, ...cycled };
+  }
+
+  let exerciseAddedKcal = 0;
+  if (day.exerciseCalories && day.weightKg) {
+    exerciseAddedKcal = exerciseKcal(day.activities, day.weightKg);
+    if (exerciseAddedKcal > 0) {
+      target = { ...target, kcal: target.kcal + exerciseAddedKcal };
+      notes.push(
+        `+${exerciseAddedKcal} kcal added back from today's cardio. This is a rough estimate from distance and bodyweight, and it's the commonest way to eat more than you meant to.`,
+      );
+    }
+  }
+
+  return { target, notes, exerciseAddedKcal };
+}
+
 // ── §8.3 protein vs progress ─────────────────────────────────────────
 
 export interface WeekSlice {

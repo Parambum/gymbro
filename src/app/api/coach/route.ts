@@ -43,6 +43,12 @@ const BodySchema = z.object({
     .max(40)
     // the Messages API requires the conversation to open on a user turn
     .refine((turns) => turns[0]?.role === "user", "Conversation must start with a user message."),
+  // The user's own calendar day, for "how many calories have I got left
+  // today?" — only the browser knows which day it is where they are.
+  localDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -69,12 +75,17 @@ export async function POST(req: Request) {
           ? await runGroqCoach(messages, userId)
           : provider === "anthropic"
             ? await runCoach(messages, userId)
-            : await runLocalCoach(messages, userId);
+            : await runLocalCoach(messages, userId, { localDate: parsed.localDate });
     return NextResponse.json(result);
   } catch (err) {
+    // The detail goes to the server log, not the chat: an error message can
+    // carry file paths and package names, and a member can do nothing with
+    // either.
     console.error("[coach] request failed:", err);
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: `Coach unavailable: ${message}` }, { status: 502 });
+    return NextResponse.json(
+      { error: "The coach hit a problem on our side. Try again in a moment — if it keeps happening, it's on us, not you." },
+      { status: 502 },
+    );
   }
 }
 
