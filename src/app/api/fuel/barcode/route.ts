@@ -4,7 +4,8 @@ import { connectDB } from "@/lib/db/mongoose";
 import { FuelFood } from "@/models/FuelFood";
 import { FuelPortion } from "@/models/FuelPortion";
 import { FuelBarcodeCache } from "@/models/FuelBarcodeCache";
-import { createFood, fuelGuard } from "@/lib/fuel/server";
+import { createFood } from "@/lib/fuel/server";
+import { isFuelEnabled } from "@/lib/fuel/flag";
 import { fetchOffProduct, isValidBarcode } from "@/lib/fuel/off";
 import { entryMacrosFor } from "@/lib/fuel/log";
 
@@ -23,10 +24,15 @@ const MISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
  * Misses are cached as well, with a shorter life. "OFF doesn't have this" is
  * a useful answer to give instantly, but products get added, so the miss
  * expires and the next scan tries again.
+ *
+ * No session required: the Android app scans without a NextAuth cookie, and
+ * nothing here is per-user — every food it reads or writes is global
+ * (`ownerUserId: null`). The kill switch still applies.
  */
 export async function GET(req: Request) {
-  const guard = await fuelGuard();
-  if (guard.error) return guard.error;
+  if (!isFuelEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const code = (new URL(req.url).searchParams.get("code") ?? "").trim();
   if (!isValidBarcode(code)) {

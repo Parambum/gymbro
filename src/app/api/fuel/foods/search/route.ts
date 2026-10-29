@@ -5,9 +5,10 @@ import { FuelFood } from "@/models/FuelFood";
 import { FuelPortion } from "@/models/FuelPortion";
 import { FuelLog } from "@/models/FuelLog";
 import { FuelFavorite } from "@/models/FuelFavorite";
-import { fuelGuard } from "@/lib/fuel/server";
+import { isFuelEnabled } from "@/lib/fuel/flag";
+import { currentUserId } from "@/lib/auth-helpers";
 import { rankFoods, tokenize } from "@/lib/fuel/search";
-import { candidatePool, toCandidate } from "@/lib/fuel/food-pool";
+import { candidatePool, toCandidate, visibleTo } from "@/lib/fuel/food-pool";
 import { entryMacrosFor } from "@/lib/fuel/log";
 
 export const runtime = "nodejs";
@@ -30,6 +31,12 @@ export const runtime = "nodejs";
  *
  * Every row carries the macros for its default portion, so the list answers
  * "how many calories is one katori of this" without a tap (§6).
+ *
+ * Unlike every other /api/fuel route, this one does NOT require a session:
+ * the Android app calls it without a NextAuth cookie. Signed out, the search
+ * runs over the global catalog only (`ownerUserId: null`) with no history
+ * boosts. Signed in, it behaves exactly as before. The kill switch still
+ * applies either way.
  */
 /**
  * Minimum rank score for a result found only by fuzzy matching against the
@@ -39,8 +46,11 @@ export const runtime = "nodejs";
 const FUZZY_FLOOR = 60;
 
 export async function GET(req: Request) {
-  const guard = await fuelGuard();
-  if (guard.error) return guard.error;
+  // Same 404 as fuelGuard() when flagged off, but the session is optional.
+  if (!isFuelEnabled()) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const userId = await currentUserId();
 
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").slice(0, 80);
@@ -48,30 +58,34 @@ export async function GET(req: Request) {
 
   try {
     await connectDB();
-    const uid = new Types.ObjectId(guard.userId);
+    const uid = userId ? new Types.ObjectId(userId) : null;
 
     // ── the user's own history, which outranks everything ───────────
-    const [frequents, recents, favorites] = await Promise.all([
-      FuelLog.aggregate<{ _id: Types.ObjectId; n: number }>([
-        { $match: { userId: uid, foodId: { $ne: null } } },
-        { $group: { _id: "$foodId", n: { $sum: 1 } } },
-        { $sort: { n: -1 } },
-        { $limit: 20 },
-      ]),
-      FuelLog.find({ userId: uid, foodId: { $ne: null } })
-        .sort({ loggedAt: -1 })
-        .limit(40)
-        .select({ foodId: 1 })
-        .lean(),
-      FuelFavorite.find({ userId: uid }).select({ foodId: 1 }).lean(),
-    ]);
+    // Skipped entirely when signed out: there is no one to personalise for.
+    const [frequents, recents, favorites] = uid
+      ? await Promise.all([
+          FuelLog.aggregate<{ _id: Types.ObjectId; n: number }>([
+            { $match: { userId: uid, foodId: { $ne: null } } },
+            { $group: { _id: "$foodId", n: { $sum: 1 } } },
+            { $sort: { n: -1 } },
+            { $limit: 20 },
+          ]),
+          FuelLog.find({ userId: uid, foodId: { $ne: null } })
+            .sort({ loggedAt: -1 })
+            .limit(40)
+            .select({ foodId: 1 })
+            .lean(),
+          FuelFavorite.find({ userId: uid }).select({ foodId: 1 }).lean(),
+        ])
+      : [[], [], []];
 
     const frequentIds = frequents.map((f) => String(f._id));
     const recentIds = [...new Set(recents.map((r) => String(r.foodId)))];
     const favoriteIds = favorites.map((f) => String(f.foodId));
 
-    // Only global foods, plus this user's own. Never another user's custom food.
-    const visible = { $or: [{ ownerUserId: null }, { ownerUserId: uid }] };
+    // Only global foods, plus this user's own. Never another user's custom
+    // food — and signed out, global foods only.
+    const visible = visibleTo(userId);
 
     // ── stage 1: narrow (shared with the describe parser) ───────────
     let pool: Array<Record<string, unknown>> = [];
